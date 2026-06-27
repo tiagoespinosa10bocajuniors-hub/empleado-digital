@@ -1,0 +1,9 @@
+<svg viewBox="0 0 96 96" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Empleado Digital">
+  <rect width="96" height="96" rx="22" fill="#0071e3"/>
+  <rect x="15" y="16" width="26" height="18" rx="7" fill="#ffffff" opacity="0.4"/>
+  <path d="M22 33 L22 42 L31 34 Z" fill="#ffffff" opacity="0.4"/>
+  <rect x="55" y="19" width="26" height="18" rx="7" fill="#ffffff" opacity="0.55"/>
+  <path d="M74 36 L74 45 L65 37 Z" fill="#ffffff" opacity="0.55"/>
+  <circle cx="48" cy="55" r="12" fill="#ffffff"/>
+  <path d="M28 90 C28 75 37 67 48 67 C59 67 68 75 68 90 Z" fill="#ffffff"/>
+</svg>

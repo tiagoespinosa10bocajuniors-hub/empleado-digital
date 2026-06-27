@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tu Empleado Digital</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="icon" type="image/svg+xml" href="logo.svg">
+<style>
+  :root{
+    --ink:#1d1d1f; --sub:#515154; --blue:#0071e3; --blue-d:#0077ed;
+    --hair:#e6e6eb; --bg:#ffffff;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--ink);background:var(--bg);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+  a{text-decoration:none;color:inherit}
+  .wrap{max-width:1000px;margin:0 auto;padding:0 22px}
+
+  /* NAV */
+  nav{height:54px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--hair);position:sticky;top:0;background:rgba(255,255,255,.85);backdrop-filter:saturate(180%) blur(14px);z-index:30}
+  .brand{font-weight:700;font-size:16px;letter-spacing:-.2px;display:flex;align-items:center;gap:8px}
+  .brand .ico{width:22px;height:22px;border-radius:7px;background:var(--ink);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px}
+  nav a.enter{font-size:14px;color:var(--blue);font-weight:500}
+
+  /* BUTTONS */
+  .pill{display:inline-flex;align-items:center;justify-content:center;background:var(--blue);color:#fff;font-weight:500;font-size:17px;padding:12px 24px;border-radius:980px;border:none;cursor:pointer;transition:.2s}
+  .pill:hover{background:var(--blue-d)}
+  .link{display:inline-flex;align-items:center;gap:3px;color:var(--blue);font-size:17px;font-weight:500}
+  .link:hover{text-decoration:underline}
+
+  /* HERO */
+  .hero{text-align:center;padding:74px 0 0;background:linear-gradient(180deg,#fbfdff 0%,#eef4fb 55%,#ffffff 100%)}
+  .hero h1{font-size:80px;font-weight:800;letter-spacing:-3px;line-height:1.02}
+  .hero .sub{font-size:26px;font-weight:500;color:var(--sub);margin:18px auto 0;max-width:620px;letter-spacing:-.3px}
+  .cta{display:flex;gap:22px;align-items:center;justify-content:center;margin-top:30px}
+  .freenote{font-size:14px;color:var(--sub);margin-top:18px}
+
+  /* DEVICE */
+  .device{width:330px;margin:48px auto 0;background:#fff;border-radius:34px;border:1px solid var(--hair);box-shadow:0 30px 60px -18px rgba(20,40,80,.22);padding:14px 14px 18px}
+  .notch{width:120px;height:6px;border-radius:6px;background:#e3e3e8;margin:4px auto 14px}
+  .chathead{font-size:12px;color:var(--sub);display:flex;align-items:center;gap:6px;padding:0 6px 12px}
+  .chatdot{width:7px;height:7px;border-radius:50%;background:#34c759}
+  .b{max-width:84%;padding:9px 13px;border-radius:17px;font-size:14px;line-height:1.4;margin-bottom:8px}
+  .b.them{background:#f0f0f3}
+  .b.me{background:var(--blue);color:#fff;margin-left:auto}
+
+  /* SECTION */
+  section.feat{padding:96px 0;text-align:center}
+  section.feat h2{font-size:46px;font-weight:800;letter-spacing:-1.5px}
+  section.feat .lead{font-size:21px;color:var(--sub);margin:14px auto 0;max-width:560px}
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:26px;margin-top:56px;text-align:left}
+  .card{background:#f5f5f7;border-radius:22px;padding:30px 26px}
+  .card .num{font-size:15px;font-weight:700;color:var(--blue);margin-bottom:12px}
+  .card h3{font-size:21px;font-weight:700;letter-spacing:-.4px;margin-bottom:8px}
+  .card p{font-size:16px;color:var(--sub);line-height:1.5}
+
+  .closing{background:#f5f5f7;text-align:center;padding:90px 0}
+  .closing h2{font-size:40px;font-weight:800;letter-spacing:-1.2px}
+  .closing p{font-size:19px;color:var(--sub);margin:12px 0 28px}
+
+  footer{padding:30px 0;border-top:1px solid var(--hair);text-align:center;color:#86868b;font-size:13px}
+
+  /* OVERLAY */
+  .overlay{position:fixed;inset:0;background:rgba(0,0,0,.32);backdrop-filter:blur(3px);display:none;align-items:center;justify-content:center;padding:18px;z-index:60}
+  .overlay.on{display:flex}
+  .sheet{background:#fff;width:100%;max-width:420px;border-radius:28px;padding:30px 26px 30px;position:relative;text-align:center}
+  .sheet .x{position:absolute;top:18px;right:20px;font-size:24px;color:#86868b;background:none;border:none;cursor:pointer;line-height:1}
+  .sheet .sn{font-size:13px;color:#86868b;margin-bottom:8px}
+  .sheet h3{font-size:26px;font-weight:700;letter-spacing:-.6px;margin-bottom:22px}
+  .opt{display:block;width:100%;text-align:left;border:1px solid var(--hair);background:#fff;border-radius:16px;padding:16px 18px;margin-bottom:11px;cursor:pointer;font-size:17px;font-weight:600;transition:.15s}
+  .opt:hover{border-color:var(--blue);background:#f7faff}
+  .opt small{display:block;font-weight:400;color:#86868b;font-size:13px;margin-top:3px}
+  .opt.solid{background:var(--blue);color:#fff;border-color:transparent}
+  .opt.solid:hover{background:var(--blue-d)}
+  .opt.solid small{color:rgba(255,255,255,.85)}
+  .ortxt{color:#86868b;font-size:13px;margin:4px 0 11px}
+  .back{background:none;border:none;color:#86868b;font-size:14px;cursor:pointer;margin-top:4px}
+  .checkc{width:70px;height:70px;border-radius:50%;background:#34c759;color:#fff;font-size:36px;display:flex;align-items:center;justify-content:center;margin:4px auto 18px}
+
+  @media(max-width:760px){
+    .hero{padding-top:48px}
+    .hero h1{font-size:48px;letter-spacing:-1.6px}
+    .hero .sub{font-size:20px}
+    .cta{flex-direction:column;gap:14px}
+    .grid{grid-template-columns:1fr}
+    section.feat h2{font-size:34px}
+    .device{width:300px}
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="wrap" style="display:flex;align-items:center;justify-content:space-between;width:100%">
+    <div class="brand"><img src="logo.svg" alt="" width="26" height="26" style="border-radius:6px;display:block"> Empleado Digital</div>
+    <a href="#" class="enter" onclick="openOb();return false">Entrar</a>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap">
+    <h1>Empleado Digital</h1>
+    <p class="sub">Atiende tu WhatsApp solo. Responde, pasa precios y toma pedidos, las 24 horas.</p>
+    <div class="cta">
+      <button class="pill" onclick="openOb()">Empezá gratis</button>
+      <a class="link" href="#como">Ver cómo funciona ›</a>
+    </div>
+    <p class="freenote">Gratis para empezar &nbsp;·&nbsp; Pagás cuando te sirva</p>
+
+    <div class="device" aria-hidden="true">
+      <div class="notch"></div>
+      <div class="chathead"><span class="chatdot"></span> en línea</div>
+      <div class="b them">Hola, ¿tenés coca de 2 litros?</div>
+      <div class="b me">¡Sí! Coca 2.25L sale $2.500 y hay stock. ¿Cuántas te anoto?</div>
+      <div class="b them">6, y un fernet</div>
+      <div class="b me">Listo 👍 6 Coca + 1 Fernet = $24.500. ¿Confirmo?</div>
+    </div>
+  </div>
+</header>
+
+<section class="feat" id="como">
+  <div class="wrap">
+    <h2>Simple como mandar un mensaje.</h2>
+    <p class="lead">Lo conectás en minutos. Funciona para siempre.</p>
+    <div class="grid">
+      <div class="card"><div class="num">01</div><h3>Conectá tu WhatsApp</h3><p>Un número nuevo al toque, o el tuyo de siempre. Sin vueltas técnicas.</p></div>
+      <div class="card"><div class="num">02</div><h3>Cargá tus productos</h3><p>Una foto de tu lista, un Excel, o se lo contás por chat. Él aprende.</p></div>
+      <div class="card"><div class="num">03</div><h3>Atiende solo</h3><p>Responde, toma pedidos y te los pasa. Vos mirás todo desde el panel.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="closing">
+  <div class="wrap">
+    <h2>Probalo gratis hoy.</h2>
+    <p>Sin tarjeta. Empezás gratis y pagás solo cuando te sirva.</p>
+    <button class="pill" onclick="openOb()">Empezá gratis</button>
+  </div>
+</section>
+
+<footer>Empleado Digital · para comercios y distribuidoras · © 2026</footer>
+
+<!-- ONBOARDING -->
+<div class="overlay" id="ob">
+  <div class="sheet">
+    <button class="x" onclick="closeOb()">×</button>
+    <div class="screen" data-step="1">
+      <div class="sn">Paso 1 de 3</div>
+      <h3>¿Cómo querés tu WhatsApp?</h3>
+      <button class="opt solid" onclick="goStep(2)">Dame un número nuevo<small>listo en el momento</small></button>
+      <button class="opt" onclick="goStep(2)">Usar mi número<small>unos pasos más</small></button>
+    </div>
+    <div class="screen" data-step="2" style="display:none">
+      <div class="sn">Paso 2 de 3</div>
+      <h3>Cargá tus productos</h3>
+      <button class="opt solid" onclick="goStep(3)">📷 Sacale una foto a tu lista</button>
+      <div class="ortxt">— o —</div>
+      <button class="opt" onclick="goStep(3)">Subir Excel / PDF</button>
+      <button class="opt" onclick="goStep(3)">Contarle por chat qué vendo</button>
+      <button class="back" onclick="goStep(1)">‹ Volver</button>
+    </div>
+    <div class="screen" data-step="3" style="display:none">
+      <div class="checkc">✓</div>
+      <h3>¡Listo!</h3>
+      <p style="color:#86868b;margin-bottom:22px">Tu empleado ya está atendiendo tu WhatsApp.</p>
+      <button class="pill" onclick="closeOb()">Probarlo ahora</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  function openOb(){document.getElementById('ob').classList.add('on');goStep(1)}
+  function closeOb(){document.getElementById('ob').classList.remove('on')}
+  function goStep(n){document.querySelectorAll('.screen').forEach(function(s){s.style.display=(s.getAttribute('data-step')==String(n))?'block':'none'})}
+  document.getElementById('ob').addEventListener('click',function(e){if(e.target===this)closeOb()});
+</script>
+</body>
+</html>

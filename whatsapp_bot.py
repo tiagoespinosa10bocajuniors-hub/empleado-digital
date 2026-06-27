@@ -2,7 +2,7 @@
 # Servidor web que recibe mensajes de Twilio, pregunta a Gemini y responde.
 
 import os
-from flask import Flask, request
+from flask import Flask, request, send_from_directory
 from twilio.twiml.messaging_response import MessagingResponse
 from google import genai
 
@@ -55,7 +55,13 @@ def whatsapp():
 
 @app.route("/", methods=["GET"])
 def home():
-    return "Empleado Digital activo."
+    # Sirve la app web (landing + alta)
+    return send_from_directory(CARPETA, "index.html")
+
+
+@app.route("/logo.svg")
+def logo():
+    return send_from_directory(CARPETA, "logo.svg")
 
 
 # Solo para correr en tu compu. En la nube lo arranca gunicorn.
