@@ -1,0 +1,21 @@
+LISTA DE PRODUCTOS - Distribuidora (ejemplo - reemplazar con los datos reales)
+
+BEBIDAS
+- Coca-Cola 2.25L - $2.500 - stock: 48
+- Coca-Cola 1.5L - $1.900 - stock: 60
+- Sprite 2.25L - $2.300 - stock: 30
+- Agua Mineral Villa del Sur 2L - $1.200 - stock: 90
+- Cerveza Quilmes 1L retornable - $1.700 - stock: 120
+- Fernet Branca 750ml - $9.500 - stock: 24
+
+ALMACEN
+- Aceite Natura 900ml - $2.800 - stock: 40
+- Arroz Gallo Oro 1kg - $1.600 - stock: 75
+- Fideos Matarazzo 500g - $950 - stock: 100
+- Azucar Ledesma 1kg - $1.300 - stock: 50
+- Yerba Playadito 1kg - $3.200 - stock: 65
+
+LIMPIEZA
+- Lavandina Ayudin 1L - $1.100 - stock: 80
+- Detergente Magistral 750ml - $2.100 - stock: 45
+- Papel Higienico Elite x4 - $2.400 - stock: 70

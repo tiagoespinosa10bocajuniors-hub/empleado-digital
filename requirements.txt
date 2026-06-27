@@ -1,0 +1,4 @@
+flask
+twilio
+google-genai
+gunicorn
