@@ -2,7 +2,8 @@
 # Un solo servidor que atiende a muchos negocios.
 # - Cada negocio se registra, entra y carga SUS productos.
 # - Cuando llega un WhatsApp, busca de que negocio es y responde con SU lista.
-# - Soporta el numero de prueba de Twilio (sandbox) Y el numero propio por Meta.
+# - Tambien guarda los mensajes que entran (bandeja de pedidos).
+# - Y maneja CLIENTES con cuenta corriente (conciliacion: quien debe y cuanto).
 
 import os
 import datetime
@@ -14,6 +15,7 @@ from flask import (Flask, request, send_from_directory, render_template,
                    redirect, url_for, session, flash)
 from twilio.twiml.messaging_response import MessagingResponse
 from google import genai
+from google.genai import types
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -84,7 +86,9 @@ def enviar_wa(phone_id, to, body):
         print("WA send error:", e)
 
 
-# Cada fila = un negocio.
+# ------------------------------------------------------------------
+# 3) Modelos (cada tabla de la base de datos)
+# ------------------------------------------------------------------
 class Negocio(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     nombre = db.Column(db.String(120), nullable=False)
@@ -96,8 +100,58 @@ class Negocio(db.Model):
     creado = db.Column(db.DateTime, default=datetime.datetime.utcnow)
 
 
+class Cliente(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    negocio_id = db.Column(db.Integer, db.ForeignKey("negocio.id"), nullable=False)
+    nombre = db.Column(db.String(120), nullable=False)
+    telefono = db.Column(db.String(40), default="")
+    notas = db.Column(db.Text, default="")
+    creado = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    movimientos = db.relationship("Movimiento", backref="cliente", lazy=True)
+
+    def saldo(self):
+        """Positivo = el cliente te debe. Negativo = tiene saldo a favor."""
+        s = 0.0
+        for m in self.movimientos:
+            if m.tipo == "cargo":
+                s += m.monto
+            else:
+                s -= m.monto
+        return s
+
+
+class Movimiento(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    cliente_id = db.Column(db.Integer, db.ForeignKey("cliente.id"), nullable=False)
+    tipo = db.Column(db.String(10), nullable=False)   # 'cargo' (compra) o 'pago'
+    monto = db.Column(db.Float, nullable=False, default=0.0)
+    detalle = db.Column(db.String(200), default="")
+    fecha = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+
+
+class Mensaje(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    negocio_id = db.Column(db.Integer, db.ForeignKey("negocio.id"), nullable=False)
+    de = db.Column(db.String(60), default="")
+    texto = db.Column(db.Text, default="")
+    fecha = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    leido = db.Column(db.Boolean, default=False)
+
+
+def log_mensaje(negocio, de, texto):
+    """Guarda en la bandeja cada mensaje que entra (sin romper la respuesta)."""
+    try:
+        db.session.add(Mensaje(negocio_id=negocio.id, de=de or "", texto=texto or ""))
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        print("log msg:", e)
+
+
+# ------------------------------------------------------------------
+# 4) Inteligencia: responde y lee fotos
+# ------------------------------------------------------------------
 def instrucciones(negocio):
-    """Lo que el empleado tiene permitido saber, segun el negocio."""
     return f"""Sos el empleado de atencion al cliente de "{negocio.nombre}", atendiendo por WhatsApp.
 Respondes en espanol rioplatense, amable y al grano (mensajes cortos para chat).
 Solo podes usar la informacion de esta lista de productos:
@@ -111,7 +165,6 @@ Reglas:
 
 
 def responder_ia(negocio, texto):
-    """Le pregunta a Gemini con el contexto del negocio. Devuelve el texto."""
     try:
         return cliente.models.generate_content(
             model="gemini-2.5-flash",
@@ -122,13 +175,28 @@ def responder_ia(negocio, texto):
         return "Perdon, tuve un problemita. Proba de nuevo en un rato."
 
 
+def leer_lista_foto(img_bytes, mime):
+    """Le pasa una foto de la lista de precios a la IA y devuelve texto plano."""
+    prompt = ("Esta es la foto de una lista de precios de un negocio. "
+              "Devolve SOLO la lista en texto plano, un producto por linea, "
+              "con formato 'Producto - $precio'. Si ves el stock, agregalo. "
+              "No agregues comentarios, titulos ni explicaciones.")
+    parte = types.Part.from_bytes(data=img_bytes, mime_type=mime)
+    resp = cliente.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=[parte, prompt],
+    )
+    return (resp.text or "").strip()
+
+
 # ------------------------------------------------------------------
-# 3) Webhook de Twilio (numero de prueba compartido)
+# 5) Webhook de Twilio (numero de prueba compartido)
 # ------------------------------------------------------------------
 @app.route("/whatsapp", methods=["POST"])
 def whatsapp():
     pregunta = request.form.get("Body", "")
     para = request.form.get("To", "")
+    de = request.form.get("From", "")
     twiml = MessagingResponse()
 
     negocio = Negocio.query.filter_by(whatsapp_to=para).first()
@@ -138,16 +206,16 @@ def whatsapp():
         twiml.message("Este numero todavia no esta conectado a ningun negocio.")
         return str(twiml)
 
+    log_mensaje(negocio, de, pregunta)
     twiml.message(responder_ia(negocio, pregunta))
     return str(twiml)
 
 
 # ------------------------------------------------------------------
-# 3b) Webhook de WhatsApp Cloud API (Meta) - numero propio por negocio
+# 5b) Webhook de WhatsApp Cloud API (Meta) - numero propio por negocio
 # ------------------------------------------------------------------
 @app.route("/meta", methods=["GET"])
 def meta_verificar():
-    # Meta valida el webhook con este "apreton de manos"
     if request.args.get("hub.verify_token") == VERIFY_TOKEN:
         return request.args.get("hub.challenge", ""), 200
     return "token invalido", 403
@@ -163,9 +231,8 @@ def meta_mensaje():
         de = msg["from"]
         texto = msg.get("text", {}).get("body", "")
     except (KeyError, IndexError, TypeError):
-        return "ok", 200  # estados de entrega u otros eventos: ignorar
+        return "ok", 200
 
-    # Modo prueba: si esta activo, ignora a los que no estan autorizados
     if not permitido(de):
         return "ok", 200
 
@@ -173,12 +240,13 @@ def meta_mensaje():
     if not negocio:
         return "ok", 200
 
+    log_mensaje(negocio, de, texto)
     enviar_wa(phone_id, de, responder_ia(negocio, texto))
     return "ok", 200
 
 
 # ------------------------------------------------------------------
-# 4) Registro de un negocio nuevo
+# 6) Registro / entrar / salir
 # ------------------------------------------------------------------
 @app.route("/registro", methods=["GET", "POST"])
 def registro():
@@ -208,9 +276,6 @@ def registro():
     return render_template("registro.html")
 
 
-# ------------------------------------------------------------------
-# 5) Iniciar sesion / cerrar sesion
-# ------------------------------------------------------------------
 @app.route("/entrar", methods=["GET", "POST"])
 def entrar():
     if request.method == "POST":
@@ -231,42 +296,141 @@ def salir():
     return redirect(url_for("home"))
 
 
+def negocio_actual():
+    nid = session.get("negocio_id")
+    if not nid:
+        return None
+    return db.session.get(Negocio, nid)
+
+
 # ------------------------------------------------------------------
-# 6) Panel: el negocio edita sus productos y conecta su numero
+# 7) Panel principal (Inicio, Productos, Clientes, Pedidos, Mi numero)
 # ------------------------------------------------------------------
 @app.route("/panel", methods=["GET", "POST"])
 def panel():
-    nid = session.get("negocio_id")
-    if not nid:
-        return redirect(url_for("entrar"))
-    n = db.session.get(Negocio, nid)
+    n = negocio_actual()
     if not n:
-        session.clear()
         return redirect(url_for("entrar"))
 
     if request.method == "POST":
         n.productos = request.form.get("productos", "").strip()
         db.session.commit()
         flash("Guardado. Tu empleado ya usa la lista nueva.")
+        return redirect(url_for("panel") + "#productos")
+
+    clientes = Cliente.query.filter_by(negocio_id=n.id).order_by(Cliente.nombre).all()
+    total_cobrar = sum(c.saldo() for c in clientes if c.saldo() > 0)
+    mensajes = (Mensaje.query.filter_by(negocio_id=n.id)
+                .order_by(Mensaje.fecha.desc()).limit(50).all())
+    nuevos = Mensaje.query.filter_by(negocio_id=n.id, leido=False).count()
+    return render_template("panel.html", n=n, sandbox=NUMERO_SANDBOX,
+                           clientes=clientes, total_cobrar=total_cobrar,
+                           mensajes=mensajes, nuevos=nuevos)
+
+
+# --- Clientes ---
+@app.route("/clientes/nuevo", methods=["POST"])
+def clientes_nuevo():
+    n = negocio_actual()
+    if not n:
+        return redirect(url_for("entrar"))
+    nombre = request.form.get("nombre", "").strip()
+    if nombre:
+        c = Cliente(negocio_id=n.id, nombre=nombre,
+                    telefono=request.form.get("telefono", "").strip(),
+                    notas=request.form.get("notas", "").strip())
+        db.session.add(c)
+        db.session.commit()
+        flash("Cliente agregado.")
+    return redirect(url_for("panel") + "#clientes")
+
+
+@app.route("/cliente/<int:cid>")
+def cliente_detalle(cid):
+    n = negocio_actual()
+    if not n:
+        return redirect(url_for("entrar"))
+    c = db.session.get(Cliente, cid)
+    if not c or c.negocio_id != n.id:
         return redirect(url_for("panel"))
-    return render_template("panel.html", n=n, sandbox=NUMERO_SANDBOX)
+    movs = (Movimiento.query.filter_by(cliente_id=c.id)
+            .order_by(Movimiento.fecha.desc()).all())
+    return render_template("cliente.html", n=n, c=c, movs=movs, saldo=c.saldo())
 
 
+@app.route("/cliente/<int:cid>/mov", methods=["POST"])
+def cliente_mov(cid):
+    n = negocio_actual()
+    if not n:
+        return redirect(url_for("entrar"))
+    c = db.session.get(Cliente, cid)
+    if not c or c.negocio_id != n.id:
+        return redirect(url_for("panel"))
+    tipo = "pago" if request.form.get("tipo") == "pago" else "cargo"
+    try:
+        monto = float(request.form.get("monto", "0").replace(",", "."))
+    except ValueError:
+        monto = 0.0
+    if monto > 0:
+        db.session.add(Movimiento(cliente_id=c.id, tipo=tipo, monto=monto,
+                                  detalle=request.form.get("detalle", "").strip()))
+        db.session.commit()
+        flash("Movimiento registrado.")
+    return redirect(url_for("cliente_detalle", cid=c.id))
+
+
+# --- Pedidos (bandeja) ---
+@app.route("/pedidos/vistos", methods=["POST"])
+def pedidos_vistos():
+    n = negocio_actual()
+    if not n:
+        return redirect(url_for("entrar"))
+    Mensaje.query.filter_by(negocio_id=n.id, leido=False).update({"leido": True})
+    db.session.commit()
+    return redirect(url_for("panel") + "#pedidos")
+
+
+# --- Productos por foto ---
+@app.route("/panel/foto", methods=["POST"])
+def panel_foto():
+    n = negocio_actual()
+    if not n:
+        return redirect(url_for("entrar"))
+    f = request.files.get("foto")
+    if f and f.filename:
+        try:
+            raw = f.read()
+            mime = f.mimetype or "image/jpeg"
+            texto = leer_lista_foto(raw, mime)
+            if texto:
+                if n.productos and n.productos.strip():
+                    n.productos = n.productos.strip() + "\n" + texto
+                else:
+                    n.productos = texto
+                db.session.commit()
+                flash("Lei la foto y agregue los productos. Revisalos abajo y guarda.")
+            else:
+                flash("No pude leer la foto. Proba con una mas clara.")
+        except Exception as e:
+            print("foto:", e)
+            flash("No pude leer la foto. Proba de nuevo en un rato.")
+    return redirect(url_for("panel") + "#productos")
+
+
+# --- Mi numero propio (Meta) ---
 @app.route("/panel/numero", methods=["POST"])
 def panel_numero():
-    nid = session.get("negocio_id")
-    if not nid:
+    n = negocio_actual()
+    if not n:
         return redirect(url_for("entrar"))
-    n = db.session.get(Negocio, nid)
-    if n:
-        n.wa_phone_id = (request.form.get("wa_phone_id", "").strip() or None)
-        db.session.commit()
-        flash("Guardado. Avisanos para terminar de activar tu numero.")
-    return redirect(url_for("panel"))
+    n.wa_phone_id = (request.form.get("wa_phone_id", "").strip() or None)
+    db.session.commit()
+    flash("Guardado. Avisanos para terminar de activar tu numero.")
+    return redirect(url_for("panel") + "#numero")
 
 
 # ------------------------------------------------------------------
-# 7) Landing y archivos
+# 8) Landing y archivos
 # ------------------------------------------------------------------
 @app.route("/")
 def home():
@@ -279,14 +443,14 @@ def logo():
 
 
 # ------------------------------------------------------------------
-# 8) Despertador: el server se pinga a si mismo para no dormirse
+# 9) Despertador: el server se pinga a si mismo para no dormirse
 # ------------------------------------------------------------------
 SELF_URL = os.environ.get("RENDER_EXTERNAL_URL", "").strip()
 
 
 def mantener_despierto():
     while True:
-        time.sleep(600)  # cada 10 minutos
+        time.sleep(600)
         try:
             urllib.request.urlopen(SELF_URL, timeout=20)
         except Exception as e:
@@ -298,12 +462,11 @@ if SELF_URL:
 
 
 # ------------------------------------------------------------------
-# 9) Crear las tablas + un negocio demo al arrancar
+# 10) Crear las tablas + un negocio demo al arrancar
 # ------------------------------------------------------------------
 def iniciar():
     with app.app_context():
         db.create_all()
-        # si la tabla ya existia, agrega la columna nueva (solo Postgres)
         if db.engine.url.get_backend_name().startswith("postgres"):
             try:
                 from sqlalchemy import text
@@ -313,7 +476,6 @@ def iniciar():
             except Exception as e:
                 db.session.rollback()
                 print("migracion:", e)
-        # negocio demo para que el sandbox siga respondiendo
         if not Negocio.query.filter_by(whatsapp_to=NUMERO_SANDBOX).first():
             try:
                 with open(os.path.join(CARPETA, "productos.txt"), "r", encoding="utf-8-sig") as f:

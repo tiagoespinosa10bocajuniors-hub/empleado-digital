@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ c.nombre }} · Cuenta corriente</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="icon" type="image/svg+xml" href="/logo.svg">
+<style>
+  :root{--ink:#1d1d1f;--sub:#6e6e73;--blue:#0071e3;--blue-d:#0077ed;--hair:#e6e6eb;--bg:#fbfbfd;--ok:#34c759;--red:#ff3b30}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--ink);background:var(--bg);-webkit-font-smoothing:antialiased}
+  a{text-decoration:none;color:inherit}
+  .wrap{max-width:680px;margin:0 auto;padding:0 18px}
+  header{height:56px;display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,.85);backdrop-filter:saturate(180%) blur(14px);border-bottom:1px solid var(--hair);position:sticky;top:0;z-index:30}
+  .brand{display:flex;align-items:center;gap:9px;font-weight:700;font-size:15px}
+  .brand img{width:24px;height:24px;border-radius:6px;display:block}
+  .back{font-size:14px;color:var(--blue);font-weight:500}
+
+  .head{padding:24px 0 6px}
+  .head h2{font-size:26px;font-weight:800;letter-spacing:-.6px}
+  .head .tel{color:var(--sub);font-size:14px;margin-top:2px}
+
+  .saldobox{background:#fff;border:1px solid var(--hair);border-radius:18px;padding:20px;text-align:center;margin:14px 0 18px}
+  .saldobox .l{font-size:13px;color:var(--sub)}
+  .saldobox .v{font-size:34px;font-weight:800;letter-spacing:-1px;margin-top:3px}
+  .v.debe{color:var(--red)} .v.favor{color:var(--blue)} .v.ok{color:var(--ok)}
+
+  .card{background:#fff;border:1px solid var(--hair);border-radius:18px;padding:20px;margin-bottom:16px}
+  .card h3{font-size:16px;font-weight:600;margin-bottom:12px}
+  label{display:block;font-size:13px;font-weight:600;margin:0 0 5px}
+  input{width:100%;font:inherit;font-size:15px;border:1px solid var(--hair);border-radius:12px;padding:11px 13px}
+  input:focus{outline:none;border-color:var(--blue)}
+  .row{display:flex;gap:10px}.row>div{flex:1}
+  .btns{display:flex;gap:10px;margin-top:14px}
+  .btn{flex:1;border:none;border-radius:980px;padding:12px;font:inherit;font-size:15px;font-weight:600;cursor:pointer}
+  .btn.cargo{background:#fff1f0;color:var(--red);border:1px solid #ffd4d1}
+  .btn.pago{background:#eafaef;color:#1c7d3a;border:1px solid #b9ecc6}
+
+  table{width:100%;border-collapse:collapse}
+  th,td{text-align:left;padding:11px 8px;border-bottom:1px solid var(--hair);font-size:14px}
+  th{font-size:12px;color:var(--sub);font-weight:600}
+  td.num{text-align:right;font-weight:600}
+  .c{color:var(--red)} .p{color:#1c7d3a}
+  .empty{color:var(--sub);font-size:14px;text-align:center;padding:22px 0}
+  .flash{background:#eafaef;border:1px solid #b9ecc6;color:#1c7d3a;border-radius:12px;padding:11px 15px;font-size:14px;margin:14px 0}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap" style="display:flex;align-items:center;justify-content:space-between;width:100%">
+    <div class="brand"><img src="/logo.svg" alt=""> Empleado Digital</div>
+    <a class="back" href="/panel#clientes">‹ Clientes</a>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="head">
+    <h2>{{ c.nombre }}</h2>
+    <div class="tel">{{ c.telefono or 'sin teléfono' }}{% if c.notas %} · {{ c.notas }}{% endif %}</div>
+  </div>
+
+  {% with messages = get_flashed_messages() %}
+    {% if messages %}<div class="flash">{{ messages[0] }}</div>{% endif %}
+  {% endwith %}
+
+  <div class="saldobox">
+    <div class="l">Saldo</div>
+    {% if saldo > 0 %}<div class="v debe">Te debe ${{ '%.0f'|format(saldo) }}</div>
+    {% elif saldo < 0 %}<div class="v favor">A favor ${{ '%.0f'|format(-saldo) }}</div>
+    {% else %}<div class="v ok">Al día</div>{% endif %}
+  </div>
+
+  <div class="card">
+    <h3>Anotar movimiento</h3>
+    <form action="/cliente/{{ c.id }}/mov" method="post">
+      <div class="row">
+        <div><label>Monto</label><input name="monto" inputmode="decimal" placeholder="2500" required></div>
+        <div><label>Detalle (opcional)</label><input name="detalle" placeholder="6 cocas + fernet"></div>
+      </div>
+      <div class="btns">
+        <button class="btn cargo" name="tipo" value="cargo" type="submit">+ Compra (debe)</button>
+        <button class="btn pago" name="tipo" value="pago" type="submit">− Pago</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="card" style="padding:8px 16px">
+    <h3 style="margin:12px 4px">Movimientos</h3>
+    {% if movs %}
+    <table>
+      <tr><th>Fecha</th><th>Detalle</th><th style="text-align:right">Compra</th><th style="text-align:right">Pago</th></tr>
+      {% for m in movs %}
+      <tr>
+        <td>{{ m.fecha.strftime('%d/%m %H:%M') }}</td>
+        <td>{{ m.detalle or '—' }}</td>
+        <td class="num c">{% if m.tipo == 'cargo' %}${{ '%.0f'|format(m.monto) }}{% endif %}</td>
+        <td class="num p">{% if m.tipo == 'pago' %}${{ '%.0f'|format(m.monto) }}{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </table>
+    {% else %}
+    <div class="empty">Sin movimientos todavía.</div>
+    {% endif %}
+  </div>
+</div>
+</body>
+</html>

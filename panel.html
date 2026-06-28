@@ -3,90 +3,238 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Tu panel · Empleado Digital</title>
+<title>Panel · Empleado Digital</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="icon" type="image/svg+xml" href="/logo.svg">
 <style>
-  :root{--ink:#1d1d1f;--sub:#515154;--blue:#0071e3;--blue-d:#0077ed;--hair:#e6e6eb}
+  :root{--ink:#1d1d1f;--sub:#6e6e73;--blue:#0071e3;--blue-d:#0077ed;--hair:#e6e6eb;--bg:#fbfbfd;--ok:#34c759;--red:#ff3b30}
   *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--ink);background:#f5f5f7;min-height:100vh;-webkit-font-smoothing:antialiased}
-  .top{height:54px;display:flex;align-items:center;border-bottom:1px solid var(--hair);background:rgba(255,255,255,.9);backdrop-filter:saturate(180%) blur(14px);position:sticky;top:0;z-index:10}
-  .top .wrap{max-width:760px;margin:0 auto;padding:0 22px;width:100%;display:flex;align-items:center;justify-content:space-between}
-  .brand{font-weight:700;font-size:16px;display:flex;align-items:center;gap:8px;color:inherit;text-decoration:none}
-  .salir{font-size:14px;color:var(--blue);font-weight:600;text-decoration:none}
-  .wrap2{max-width:760px;margin:0 auto;padding:30px 22px 60px}
-  h1{font-size:30px;font-weight:800;letter-spacing:-1px}
-  .sub{font-size:16px;color:var(--sub);margin-top:4px}
-  .card{background:#fff;border:1px solid var(--hair);border-radius:22px;padding:26px;margin-top:22px}
-  .card h2{font-size:18px;font-weight:700;letter-spacing:-.3px;margin-bottom:6px}
-  .card p{font-size:15px;color:var(--sub);line-height:1.55}
-  .num{display:inline-block;background:#eef4fb;color:var(--blue);font-weight:700;border-radius:10px;padding:7px 12px;margin-top:10px;font-size:15px}
-  .ok-badge{display:inline-block;background:#eafaf0;color:#1c7a43;font-weight:700;border-radius:10px;padding:7px 12px;margin-top:10px;font-size:14px}
-  .step{font-size:14.5px;color:var(--sub);line-height:1.7;margin-top:8px}
-  .step b{color:var(--ink)}
-  label{display:block;font-size:14px;font-weight:600;margin:4px 0 8px}
-  textarea,input.inp{width:100%;border:1px solid var(--hair);border-radius:14px;padding:14px;font-size:15px;font-family:inherit;line-height:1.5}
-  textarea{min-height:240px;resize:vertical}
-  textarea:focus,input.inp:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 4px rgba(0,113,227,.12)}
-  .pill{display:inline-block;background:var(--blue);color:#fff;font-weight:600;font-size:16px;padding:12px 26px;border:none;border-radius:980px;cursor:pointer;margin-top:16px;transition:.2s}
-  .pill:hover{background:var(--blue-d)}
-  .ok{background:#eafaf0;border:1px solid #b7ebc9;color:#1c7a43;font-size:14px;padding:11px 14px;border-radius:12px;margin-top:16px}
-  details{margin-top:8px}
-  summary{cursor:pointer;font-size:14px;color:var(--blue);font-weight:600}
+  body{font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--ink);background:var(--bg);-webkit-font-smoothing:antialiased}
+  a{text-decoration:none;color:inherit}
+  .wrap{max-width:760px;margin:0 auto;padding:0 18px}
+
+  header{height:56px;display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,.85);backdrop-filter:saturate(180%) blur(14px);border-bottom:1px solid var(--hair);position:sticky;top:0;z-index:30}
+  .brand{display:flex;align-items:center;gap:9px;font-weight:700;font-size:15px}
+  .brand img{width:24px;height:24px;border-radius:6px;display:block}
+  .who{font-size:13px;color:var(--sub);display:flex;align-items:center;gap:14px}
+  .who a{color:var(--blue);font-weight:500}
+
+  /* tabs */
+  .tabs{display:flex;gap:4px;overflow-x:auto;padding:14px 0 0;-ms-overflow-style:none;scrollbar-width:none}
+  .tabs::-webkit-scrollbar{display:none}
+  .tab{flex:0 0 auto;border:none;background:none;font:inherit;font-size:15px;font-weight:500;color:var(--sub);padding:9px 14px;border-radius:980px;cursor:pointer;white-space:nowrap}
+  .tab.on{background:var(--ink);color:#fff}
+  .badge{display:inline-block;min-width:18px;height:18px;line-height:18px;text-align:center;background:var(--red);color:#fff;font-size:11px;font-weight:700;border-radius:9px;padding:0 5px;margin-left:5px;vertical-align:1px}
+
+  section{display:none;padding:22px 0 60px}
+  section.on{display:block}
+  h2{font-size:24px;font-weight:700;letter-spacing:-.5px;margin-bottom:4px}
+  .lead{color:var(--sub);font-size:15px;margin-bottom:18px}
+
+  .card{background:#fff;border:1px solid var(--hair);border-radius:18px;padding:20px;margin-bottom:16px}
+  .card h3{font-size:17px;font-weight:600;margin-bottom:4px}
+  .card .hint{font-size:13px;color:var(--sub);margin-bottom:14px}
+
+  .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px}
+  .stat{background:#fff;border:1px solid var(--hair);border-radius:16px;padding:16px}
+  .stat .n{font-size:28px;font-weight:800;letter-spacing:-1px}
+  .stat .l{font-size:12px;color:var(--sub);margin-top:2px}
+
+  label{display:block;font-size:13px;font-weight:600;margin:0 0 5px}
+  input,textarea{width:100%;font:inherit;font-size:15px;border:1px solid var(--hair);border-radius:12px;padding:11px 13px;background:#fff;color:var(--ink)}
+  input:focus,textarea:focus{outline:none;border-color:var(--blue)}
+  textarea{min-height:200px;resize:vertical;line-height:1.5}
+  .row{display:flex;gap:10px;flex-wrap:wrap}
+  .row>div{flex:1;min-width:140px}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;background:var(--blue);color:#fff;font-weight:500;font-size:15px;border:none;border-radius:980px;padding:11px 22px;cursor:pointer;margin-top:14px}
+  .btn:hover{background:var(--blue-d)}
+  .btn.ghost{background:#f0f0f3;color:var(--ink)}
+  .btn.sm{padding:8px 16px;font-size:14px;margin-top:0}
+
+  table{width:100%;border-collapse:collapse}
+  th,td{text-align:left;padding:12px 8px;border-bottom:1px solid var(--hair);font-size:14px}
+  th{font-size:12px;color:var(--sub);font-weight:600}
+  .saldo.debe{color:var(--red);font-weight:700}
+  .saldo.ok{color:var(--ok);font-weight:600}
+  .saldo.favor{color:var(--blue);font-weight:700}
+  .verlink{color:var(--blue);font-weight:600;font-size:14px}
+
+  .msg{border:1px solid var(--hair);border-radius:14px;padding:13px 15px;margin-bottom:10px}
+  .msg.new{border-color:#cfe6ff;background:#f5faff}
+  .msg .top{display:flex;justify-content:space-between;font-size:12px;color:var(--sub);margin-bottom:4px}
+  .msg .txt{font-size:15px}
+
+  .flash{background:#eafaef;border:1px solid #b9ecc6;color:#1c7d3a;border-radius:12px;padding:11px 15px;font-size:14px;margin:14px 0}
+  .empty{color:var(--sub);font-size:14px;text-align:center;padding:26px 0}
+  .banner{background:#fff;border:1px solid var(--hair);border-radius:16px;padding:16px 18px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center}
+  .banner .big{font-size:22px;font-weight:800;letter-spacing:-.5px}
+  .banner .l{font-size:12px;color:var(--sub)}
+  code{background:#f0f0f3;padding:2px 7px;border-radius:6px;font-size:13px}
 </style>
 </head>
 <body>
-<div class="top"><div class="wrap">
-  <a href="/" class="brand"><img src="/logo.svg" width="26" height="26" style="border-radius:6px"> Empleado Digital</a>
-  <a href="/salir" class="salir">Salir</a>
-</div></div>
 
-<div class="wrap2">
-  <h1>Hola, {{ n.nombre }}</h1>
-  <p class="sub">Acá manejás tu empleado.</p>
+<header>
+  <div class="wrap" style="display:flex;align-items:center;justify-content:space-between;width:100%">
+    <div class="brand"><img src="/logo.svg" alt=""> Empleado Digital</div>
+    <div class="who"><span>{{ n.nombre }}</span><a href="/salir">Salir</a></div>
+  </div>
+</header>
 
-  {% with mensajes = get_flashed_messages() %}
-    {% if mensajes %}{% for m in mensajes %}<div class="ok">{{ m }}</div>{% endfor %}{% endif %}
+<div class="wrap">
+
+  <div class="tabs">
+    <button class="tab on" data-t="inicio">Inicio</button>
+    <button class="tab" data-t="productos">Productos</button>
+    <button class="tab" data-t="clientes">Clientes</button>
+    <button class="tab" data-t="pedidos">Pedidos{% if nuevos %}<span class="badge">{{ nuevos }}</span>{% endif %}</button>
+    <button class="tab" data-t="numero">Mi número</button>
+  </div>
+
+  {% with messages = get_flashed_messages() %}
+    {% if messages %}<div class="flash">{{ messages[0] }}</div>{% endif %}
   {% endwith %}
 
-  <div class="card">
-    <h2>Conexión de WhatsApp</h2>
-    {% if n.wa_phone_id %}
-      <p>Conectado por <b>tu número propio</b> (WhatsApp de Meta).</p>
-      <div class="ok-badge">✓ Número propio · ID {{ n.wa_phone_id }}</div>
-    {% elif n.whatsapp_to %}
-      <p>Tu empleado atiende en este número:</p>
-      <div class="num">{{ n.whatsapp_to.replace('whatsapp:', '') }}</div>
-    {% else %}
-      <p>Para probarlo ahora mismo desde tu teléfono, usá el número de prueba:</p>
-      <div class="step">
-        1. Guardá el contacto <b>{{ sandbox.replace('whatsapp:', '') }}</b><br>
-        2. Mandale por WhatsApp: <b>join dream-remarkable</b><br>
-        3. Escribile como si fueras un cliente y te responde.
-      </div>
-      <p style="margin-top:14px;font-size:13.5px;color:#86868b">En la versión de prueba ese número es compartido. Cuando conectes tu propio número, tus clientes te escriben directo a vos.</p>
-    {% endif %}
+  <!-- INICIO -->
+  <section id="inicio" class="on">
+    <h2>Hola, {{ n.nombre }} 👋</h2>
+    <p class="lead">Tu empleado está atendiendo. Acá controlás todo.</p>
+    <div class="stats">
+      <div class="stat"><div class="n">{{ clientes|length }}</div><div class="l">Clientes</div></div>
+      <div class="stat"><div class="n">${{ '%.0f'|format(total_cobrar) }}</div><div class="l">A cobrar</div></div>
+      <div class="stat"><div class="n">{{ nuevos }}</div><div class="l">Pedidos nuevos</div></div>
+    </div>
+    <div class="card">
+      <h3>¿Cómo se usa?</h3>
+      <p class="hint" style="margin:0">1) Cargá tus <b>productos</b> (a mano o por foto). 2) El empleado responde tu WhatsApp solo. 3) Anotás tus <b>clientes</b> y llevás su <b>cuenta corriente</b> (quién te debe). 4) Mirás los <b>pedidos</b> que entran.</p>
+    </div>
+  </section>
 
-    <details>
-      <summary>Conectar mi número propio (avanzado)</summary>
-      <p style="margin:10px 0 6px">Si ya conectaste tu WhatsApp en Meta, pegá acá el <b>Phone Number ID</b> que te da Meta. Si no sabés qué es, dejalo así — lo hacemos juntos.</p>
-      <form method="POST" action="/panel/numero">
-        <input class="inp" name="wa_phone_id" value="{{ n.wa_phone_id or '' }}" placeholder="Ej: 123456789012345">
-        <button class="pill" type="submit">Guardar número</button>
+  <!-- PRODUCTOS -->
+  <section id="productos">
+    <h2>Productos</h2>
+    <p class="lead">Es la lista que usa tu empleado para responder precios y stock.</p>
+
+    <div class="card">
+      <h3>📷 Cargar por foto</h3>
+      <p class="hint">Sacale una foto a tu lista de precios y la IA la lee sola. Tarda unos segundos.</p>
+      <form action="/panel/foto" method="post" enctype="multipart/form-data">
+        <input type="file" name="foto" accept="image/*" required>
+        <button class="btn" type="submit">Leer foto</button>
       </form>
-    </details>
-  </div>
+    </div>
 
-  <div class="card">
-    <h2>Tus productos</h2>
-    <p style="margin-bottom:14px">Esto es lo único que tu empleado puede decir. Una línea por producto: nombre - precio - stock.</p>
-    <form method="POST" action="/panel">
-      <textarea name="productos" placeholder="Coca 2.25L - $2.500 - stock 48">{{ n.productos }}</textarea>
-      <button class="pill" type="submit">Guardar</button>
-    </form>
-  </div>
+    <div class="card">
+      <h3>Tu lista</h3>
+      <p class="hint">Un producto por línea. Ej: <code>Coca 2.25L - $2.500 (hay stock)</code></p>
+      <form action="/panel" method="post">
+        <textarea name="productos" placeholder="Coca 2.25L - $2.500&#10;Fernet 750 - $6.000">{{ n.productos }}</textarea>
+        <button class="btn" type="submit">Guardar lista</button>
+      </form>
+    </div>
+  </section>
+
+  <!-- CLIENTES -->
+  <section id="clientes">
+    <h2>Clientes</h2>
+    <p class="lead">Tu base de clientes y la cuenta corriente de cada uno.</p>
+
+    <div class="banner">
+      <div><div class="l">Total a cobrar</div><div class="big">${{ '%.0f'|format(total_cobrar) }}</div></div>
+      <div style="text-align:right"><div class="l">Clientes</div><div class="big">{{ clientes|length }}</div></div>
+    </div>
+
+    <div class="card">
+      <h3>Agregar cliente</h3>
+      <form action="/clientes/nuevo" method="post">
+        <div class="row">
+          <div><label>Nombre</label><input name="nombre" placeholder="Kiosco La Esquina" required></div>
+          <div><label>Teléfono</label><input name="telefono" placeholder="11 5555 5555"></div>
+        </div>
+        <div style="margin-top:10px"><label>Nota (opcional)</label><input name="notas" placeholder="Reparto los martes"></div>
+        <button class="btn" type="submit">Agregar cliente</button>
+      </form>
+    </div>
+
+    {% if clientes %}
+    <div class="card" style="padding:8px 16px">
+      <table>
+        <tr><th>Cliente</th><th>Teléfono</th><th>Saldo</th><th></th></tr>
+        {% for c in clientes %}
+        {% set s = c.saldo() %}
+        <tr>
+          <td><b>{{ c.nombre }}</b></td>
+          <td>{{ c.telefono or '—' }}</td>
+          <td>
+            {% if s > 0 %}<span class="saldo debe">debe ${{ '%.0f'|format(s) }}</span>
+            {% elif s < 0 %}<span class="saldo favor">a favor ${{ '%.0f'|format(-s) }}</span>
+            {% else %}<span class="saldo ok">al día</span>{% endif %}
+          </td>
+          <td style="text-align:right"><a class="verlink" href="/cliente/{{ c.id }}">Ver cuenta →</a></td>
+        </tr>
+        {% endfor %}
+      </table>
+    </div>
+    {% else %}
+    <div class="empty">Todavía no cargaste clientes. Agregá el primero arriba 👆</div>
+    {% endif %}
+  </section>
+
+  <!-- PEDIDOS -->
+  <section id="pedidos">
+    <h2>Pedidos y consultas</h2>
+    <p class="lead">Todo lo que te escriben por WhatsApp queda guardado acá.</p>
+
+    {% if mensajes %}
+      {% if nuevos %}
+      <form action="/pedidos/vistos" method="post" style="margin-bottom:14px">
+        <button class="btn ghost sm" type="submit">Marcar {{ nuevos }} como vistos</button>
+      </form>
+      {% endif %}
+      {% for m in mensajes %}
+      <div class="msg {% if not m.leido %}new{% endif %}">
+        <div class="top"><span>{{ m.de or 'cliente' }}</span><span>{{ m.fecha.strftime('%d/%m %H:%M') }}</span></div>
+        <div class="txt">{{ m.texto }}</div>
+      </div>
+      {% endfor %}
+    {% else %}
+      <div class="empty">Cuando alguien te escriba, lo vas a ver acá.</div>
+    {% endif %}
+  </section>
+
+  <!-- MI NUMERO -->
+  <section id="numero">
+    <h2>Mi número de WhatsApp</h2>
+    <p class="lead">Probalo gratis con el número de prueba, o conectá el tuyo.</p>
+
+    <div class="card">
+      <h3>1) Probarlo gratis ahora</h3>
+      <p class="hint" style="margin:0">Desde tu WhatsApp mandá <code>join dream-remarkable</code> al <b>+1 415 523 8886</b> y escribile. Te responde con tu lista.</p>
+    </div>
+
+    <div class="card">
+      <h3>2) Conectar mi número propio</h3>
+      <p class="hint">Avanzado: pegá el <b>Phone Number ID</b> que te damos al activar tu número.</p>
+      <form action="/panel/numero" method="post">
+        <input name="wa_phone_id" placeholder="Ej: 1158116877392655" value="{{ n.wa_phone_id or '' }}">
+        <button class="btn" type="submit">Guardar número</button>
+      </form>
+    </div>
+  </section>
+
 </div>
+
+<script>
+  var tabs=document.querySelectorAll('.tab'), secs=document.querySelectorAll('section');
+  function show(t){
+    tabs.forEach(function(b){b.classList.toggle('on',b.dataset.t===t)});
+    secs.forEach(function(s){s.classList.toggle('on',s.id===t)});
+    if(history.replaceState) history.replaceState(null,'','#'+t);
+  }
+  tabs.forEach(function(b){b.addEventListener('click',function(){show(b.dataset.t)})});
+  var h=(location.hash||'').replace('#','');
+  if(h && document.getElementById(h)) show(h);
+</script>
 </body>
 </html>
