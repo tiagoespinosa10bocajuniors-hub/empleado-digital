@@ -5,6 +5,9 @@
 
 import os
 import datetime
+import threading
+import time
+import urllib.request
 from flask import (Flask, request, send_from_directory, render_template,
                    redirect, url_for, session, flash)
 from twilio.twiml.messaging_response import MessagingResponse
@@ -212,6 +215,26 @@ def iniciar():
 
 
 iniciar()
+
+# ------------------------------------------------------------------
+# 9) Despertador: el server se pinga a si mismo para no dormirse
+#    (Render pone RENDER_EXTERNAL_URL solo en la nube)
+# ------------------------------------------------------------------
+SELF_URL = os.environ.get("RENDER_EXTERNAL_URL", "").strip()
+
+
+def mantener_despierto():
+    while True:
+        time.sleep(600)  # cada 10 minutos
+        try:
+            urllib.request.urlopen(SELF_URL, timeout=20)
+        except Exception as e:
+            print("keepalive:", e)
+
+
+if SELF_URL:
+    threading.Thread(target=mantener_despierto, daemon=True).start()
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
