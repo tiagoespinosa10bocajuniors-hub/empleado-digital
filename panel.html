@@ -20,7 +20,6 @@
   .who{font-size:13px;color:var(--sub);display:flex;align-items:center;gap:14px}
   .who a{color:var(--blue);font-weight:500}
 
-  /* tabs */
   .tabs{display:flex;gap:4px;overflow-x:auto;padding:14px 0 0;-ms-overflow-style:none;scrollbar-width:none}
   .tabs::-webkit-scrollbar{display:none}
   .tab{flex:0 0 auto;border:none;background:none;font:inherit;font-size:15px;font-weight:500;color:var(--sub);padding:9px 14px;border-radius:980px;cursor:pointer;white-space:nowrap}
@@ -71,6 +70,7 @@
   .banner .big{font-size:22px;font-weight:800;letter-spacing:-.5px}
   .banner .l{font-size:12px;color:var(--sub)}
   code{background:#f0f0f3;padding:2px 7px;border-radius:6px;font-size:13px}
+  .subh{font-size:17px;font-weight:600;margin:26px 0 10px}
 </style>
 </head>
 <body>
@@ -88,7 +88,7 @@
     <button class="tab on" data-t="inicio">Inicio</button>
     <button class="tab" data-t="productos">Productos</button>
     <button class="tab" data-t="clientes">Clientes</button>
-    <button class="tab" data-t="pedidos">Pedidos{% if nuevos %}<span class="badge">{{ nuevos }}</span>{% endif %}</button>
+    <button class="tab" data-t="pedidos">Pedidos{% if pedidos_nuevos %}<span class="badge">{{ pedidos_nuevos }}</span>{% endif %}</button>
     <button class="tab" data-t="numero">Mi número</button>
   </div>
 
@@ -103,11 +103,11 @@
     <div class="stats">
       <div class="stat"><div class="n">{{ clientes|length }}</div><div class="l">Clientes</div></div>
       <div class="stat"><div class="n">${{ '%.0f'|format(total_cobrar) }}</div><div class="l">A cobrar</div></div>
-      <div class="stat"><div class="n">{{ nuevos }}</div><div class="l">Pedidos nuevos</div></div>
+      <div class="stat"><div class="n">{{ pedidos_nuevos }}</div><div class="l">Pedidos nuevos</div></div>
     </div>
     <div class="card">
       <h3>¿Cómo se usa?</h3>
-      <p class="hint" style="margin:0">1) Cargá tus <b>productos</b> (a mano o por foto). 2) El empleado responde tu WhatsApp solo. 3) Anotás tus <b>clientes</b> y llevás su <b>cuenta corriente</b> (quién te debe). 4) Mirás los <b>pedidos</b> que entran.</p>
+      <p class="hint" style="margin:0">1) Cargá tus <b>productos</b> (a mano o por foto). 2) El empleado responde tu WhatsApp y <b>toma pedidos</b> solo. 3) Anotás tus <b>clientes</b> y llevás su <b>cuenta corriente</b>. 4) Revisás los <b>pedidos</b> que entran y los marcás entregados.</p>
     </div>
   </section>
 
@@ -183,13 +183,32 @@
 
   <!-- PEDIDOS -->
   <section id="pedidos">
-    <h2>Pedidos y consultas</h2>
-    <p class="lead">Todo lo que te escriben por WhatsApp queda guardado acá.</p>
+    <h2>Pedidos</h2>
+    <p class="lead">Cuando un cliente confirma una compra, el empleado la anota acá solo. Vos la revisás.</p>
 
+    {% if pedidos %}
+      {% for p in pedidos %}
+      <div class="msg {% if p.estado == 'nuevo' %}new{% endif %}">
+        <div class="top"><span>{{ p.de or 'cliente' }}</span><span>{{ p.fecha.strftime('%d/%m %H:%M') }}</span></div>
+        <div class="txt">{{ p.detalle }}{% if p.total %} — <b>${{ '%.0f'|format(p.total) }}</b>{% endif %}</div>
+        <div style="margin-top:8px">
+          {% if p.estado == 'nuevo' %}
+          <form action="/pedido/{{ p.id }}/entregado" method="post" style="display:inline">
+            <button class="btn ghost sm" type="submit">Marcar entregado</button>
+          </form>
+          {% else %}<span class="saldo ok">entregado ✓</span>{% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    {% else %}
+      <div class="empty">Todavía no hay pedidos. Cuando alguien confirme una compra, aparece acá.</div>
+    {% endif %}
+
+    <div class="subh">Consultas</div>
     {% if mensajes %}
       {% if nuevos %}
-      <form action="/pedidos/vistos" method="post" style="margin-bottom:14px">
-        <button class="btn ghost sm" type="submit">Marcar {{ nuevos }} como vistos</button>
+      <form action="/pedidos/vistos" method="post" style="margin-bottom:12px">
+        <button class="btn ghost sm" type="submit">Marcar {{ nuevos }} como vistas</button>
       </form>
       {% endif %}
       {% for m in mensajes %}

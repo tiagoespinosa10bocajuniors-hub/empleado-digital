@@ -2,8 +2,8 @@
 # Un solo servidor que atiende a muchos negocios.
 # - Cada negocio se registra, entra y carga SUS productos.
 # - Cuando llega un WhatsApp, busca de que negocio es y responde con SU lista.
-# - Tambien guarda los mensajes que entran (bandeja de pedidos).
-# - Y maneja CLIENTES con cuenta corriente (conciliacion: quien debe y cuanto).
+# - Guarda los mensajes que entran (bandeja) y TOMA PEDIDOS (primera accion del bot).
+# - Maneja CLIENTES con cuenta corriente (conciliacion: quien debe y cuanto).
 
 import os
 import datetime
@@ -138,6 +138,16 @@ class Mensaje(db.Model):
     leido = db.Column(db.Boolean, default=False)
 
 
+class Pedido(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    negocio_id = db.Column(db.Integer, db.ForeignKey("negocio.id"), nullable=False)
+    de = db.Column(db.String(60), default="")
+    detalle = db.Column(db.Text, default="")
+    total = db.Column(db.Float)                       # puede venir vacio
+    estado = db.Column(db.String(20), default="nuevo")  # nuevo / entregado
+    fecha = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+
+
 def log_mensaje(negocio, de, texto):
     """Guarda en la bandeja cada mensaje que entra (sin romper la respuesta)."""
     try:
@@ -149,7 +159,7 @@ def log_mensaje(negocio, de, texto):
 
 
 # ------------------------------------------------------------------
-# 4) Inteligencia: responde y lee fotos
+# 4) Inteligencia: responde, toma pedidos y lee fotos
 # ------------------------------------------------------------------
 def instrucciones(negocio):
     return f"""Sos el empleado de atencion al cliente de "{negocio.nombre}", atendiendo por WhatsApp.
@@ -161,7 +171,11 @@ Solo podes usar la informacion de esta lista de productos:
 Reglas:
 - Si el producto esta en la lista, deci el precio y si hay stock.
 - Si no esta, deci que no lo manejas y ofrece uno parecido si existe.
-- Nunca inventes precios ni productos."""
+- Nunca inventes precios ni productos.
+- Cuando el cliente CONFIRME un pedido (te diga que si, dale, anotamelo), agrega al FINAL,
+  en una linea NUEVA y aparte, una linea EXACTA asi:
+  #PEDIDO# detalle: <productos y cantidades> | total: <monto en numeros>
+  Si el cliente todavia NO confirmo, NO pongas esa linea. Esa linea es solo para el sistema."""
 
 
 def responder_ia(negocio, texto):
@@ -173,6 +187,41 @@ def responder_ia(negocio, texto):
     except Exception as e:
         print("ERROR:", e)
         return "Perdon, tuve un problemita. Proba de nuevo en un rato."
+
+
+def extraer_pedido(negocio, de, texto):
+    """Si la IA marco un pedido confirmado, lo guarda y limpia la respuesta al cliente."""
+    if not texto or "#PEDIDO#" not in texto:
+        return texto
+    limpio = []
+    detalle = ""
+    total = None
+    for linea in texto.splitlines():
+        if "#PEDIDO#" in linea:
+            cuerpo = linea.split("#PEDIDO#", 1)[1].strip()
+            d = cuerpo
+            if "total:" in cuerpo.lower():
+                idx = cuerpo.lower().rfind("total:")
+                d = cuerpo[:idx]
+                t = cuerpo[idx + len("total:"):]
+                num = "".join(ch for ch in t if ch.isdigit() or ch == ".")
+                try:
+                    total = float(num) if num else None
+                except ValueError:
+                    total = None
+            if "detalle:" in d.lower():
+                d = d[d.lower().find("detalle:") + len("detalle:"):]
+            detalle = d.strip(" |")
+        else:
+            limpio.append(linea)
+    try:
+        db.session.add(Pedido(negocio_id=negocio.id, de=de or "",
+                              detalle=detalle, total=total))
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        print("pedido:", e)
+    return "\n".join(limpio).strip()
 
 
 def leer_lista_foto(img_bytes, mime):
@@ -207,7 +256,9 @@ def whatsapp():
         return str(twiml)
 
     log_mensaje(negocio, de, pregunta)
-    twiml.message(responder_ia(negocio, pregunta))
+    respuesta = responder_ia(negocio, pregunta)
+    respuesta = extraer_pedido(negocio, de, respuesta)
+    twiml.message(respuesta)
     return str(twiml)
 
 
@@ -241,7 +292,9 @@ def meta_mensaje():
         return "ok", 200
 
     log_mensaje(negocio, de, texto)
-    enviar_wa(phone_id, de, responder_ia(negocio, texto))
+    respuesta = responder_ia(negocio, texto)
+    respuesta = extraer_pedido(negocio, de, respuesta)
+    enviar_wa(phone_id, de, respuesta)
     return "ok", 200
 
 
@@ -323,9 +376,13 @@ def panel():
     mensajes = (Mensaje.query.filter_by(negocio_id=n.id)
                 .order_by(Mensaje.fecha.desc()).limit(50).all())
     nuevos = Mensaje.query.filter_by(negocio_id=n.id, leido=False).count()
+    pedidos = (Pedido.query.filter_by(negocio_id=n.id)
+               .order_by(Pedido.fecha.desc()).limit(50).all())
+    pedidos_nuevos = Pedido.query.filter_by(negocio_id=n.id, estado="nuevo").count()
     return render_template("panel.html", n=n, sandbox=NUMERO_SANDBOX,
                            clientes=clientes, total_cobrar=total_cobrar,
-                           mensajes=mensajes, nuevos=nuevos)
+                           mensajes=mensajes, nuevos=nuevos,
+                           pedidos=pedidos, pedidos_nuevos=pedidos_nuevos)
 
 
 # --- Clientes ---
@@ -387,6 +444,18 @@ def pedidos_vistos():
         return redirect(url_for("entrar"))
     Mensaje.query.filter_by(negocio_id=n.id, leido=False).update({"leido": True})
     db.session.commit()
+    return redirect(url_for("panel") + "#pedidos")
+
+
+@app.route("/pedido/<int:pid>/entregado", methods=["POST"])
+def pedido_entregado(pid):
+    n = negocio_actual()
+    if not n:
+        return redirect(url_for("entrar"))
+    p = db.session.get(Pedido, pid)
+    if p and p.negocio_id == n.id:
+        p.estado = "entregado"
+        db.session.commit()
     return redirect(url_for("panel") + "#pedidos")
 
 
