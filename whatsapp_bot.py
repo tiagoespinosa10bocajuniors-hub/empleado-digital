@@ -1,9 +1,8 @@
-# whatsapp_bot.py - Empleado Digital (MOTOR multi-negocio)
-# Un solo servidor que atiende a muchos negocios.
+# whatsapp_bot.py - mAIte (motor UNIFICADO, multi-negocio)
+# UN solo cerebro (molde) para todos los canales: WhatsApp (Twilio), Meta y chat web.
 # - Cada negocio se registra, entra y carga SUS productos.
-# - Cuando llega un WhatsApp, busca de que negocio es y responde con SU lista.
-# - Guarda los mensajes que entran (bandeja) y TOMA PEDIDOS (primera accion del bot).
-# - Maneja CLIENTES con cuenta corriente (conciliacion: quien debe y cuanto).
+# - atender() = guarda mensaje -> memoria -> molde -> persiste pedidos -> responde.
+# - Cada negocio puede elegir su motor (gemini/claude/gpt/ollama).
 
 import os
 import datetime
@@ -11,6 +10,7 @@ import threading
 import time
 import urllib.request
 import json
+import secrets
 from flask import (Flask, request, send_from_directory, render_template,
                    redirect, url_for, session, flash)
 from twilio.twiml.messaging_response import MessagingResponse
@@ -38,7 +38,8 @@ cliente = genai.Client(api_key=API_KEY)
 # 2) App web + base de datos
 # ------------------------------------------------------------------
 app = Flask(__name__, template_folder=CARPETA)
-app.secret_key = os.environ.get("SECRET_KEY", "cambiar-esta-clave-secreta-en-produccion")
+# Seguridad: clave de sesion desde el entorno; si no hay, una aleatoria (nunca la publica del repo)
+app.secret_key = os.environ.get("SECRET_KEY") or secrets.token_hex(32)
 
 DB_URL = os.environ.get("DATABASE_URL", "").strip()
 if DB_URL.startswith("postgres://"):
@@ -49,19 +50,15 @@ app.config["SQLALCHEMY_DATABASE_URI"] = DB_URL
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db = SQLAlchemy(app)
 
-# Numero de prueba de Twilio (el "sandbox"). Es compartido por ahora.
 NUMERO_SANDBOX = "whatsapp:+14155238886"
 
-# --- WhatsApp Cloud API (Meta): para el numero propio de cada negocio ---
 WHATSAPP_TOKEN = os.environ.get("WHATSAPP_TOKEN", "").strip()
 VERIFY_TOKEN = os.environ.get("WHATSAPP_VERIFY_TOKEN", "empleado-digital-verify").strip()
 WA_API = os.environ.get("WHATSAPP_API_VERSION", "v21.0").strip()
-# Modo prueba: si WA_TEST_FROM tiene numeros, el bot SOLO responde a esos (por Meta).
 WA_TEST_FROM = os.environ.get("WA_TEST_FROM", "").strip()
 
 
 def permitido(de):
-    """En modo prueba, solo responde a los numeros autorizados (ignora al resto)."""
     if not WA_TEST_FROM:
         return True
     autorizados = ["".join(c for c in n if c.isdigit()) for n in WA_TEST_FROM.split(",")]
@@ -69,12 +66,9 @@ def permitido(de):
 
 
 def enviar_wa(phone_id, to, body):
-    """Envia un mensaje de WhatsApp por la API de Meta."""
     url = f"https://graph.facebook.com/{WA_API}/{phone_id}/messages"
     payload = json.dumps({
-        "messaging_product": "whatsapp",
-        "to": to,
-        "type": "text",
+        "messaging_product": "whatsapp", "to": to, "type": "text",
         "text": {"body": body},
     }).encode()
     req = urllib.request.Request(url, data=payload, headers={
@@ -88,16 +82,19 @@ def enviar_wa(phone_id, to, body):
 
 
 # ------------------------------------------------------------------
-# 3) Modelos (cada tabla de la base de datos)
+# 3) Modelos
 # ------------------------------------------------------------------
 class Negocio(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     nombre = db.Column(db.String(120), nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
     clave_hash = db.Column(db.String(255), nullable=False)
-    whatsapp_to = db.Column(db.String(40))          # numero de Twilio (sandbox)
-    wa_phone_id = db.Column(db.String(40))          # ID del numero propio (Meta)
+    whatsapp_to = db.Column(db.String(40))
+    wa_phone_id = db.Column(db.String(40))
     productos = db.Column(db.Text, default="")
+    motor = db.Column(db.String(20), default="gemini")     # gemini/claude/gpt/ollama
+    modelo_nombre = db.Column(db.String(60))               # ej "llama3.2"
+    base_url = db.Column(db.String(200))                   # para local/compatible
     creado = db.Column(db.DateTime, default=datetime.datetime.utcnow)
 
 
@@ -111,20 +108,16 @@ class Cliente(db.Model):
     movimientos = db.relationship("Movimiento", backref="cliente", lazy=True)
 
     def saldo(self):
-        """Positivo = el cliente te debe. Negativo = tiene saldo a favor."""
         s = 0.0
         for m in self.movimientos:
-            if m.tipo == "cargo":
-                s += m.monto
-            else:
-                s -= m.monto
+            s += m.monto if m.tipo == "cargo" else -m.monto
         return s
 
 
 class Movimiento(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     cliente_id = db.Column(db.Integer, db.ForeignKey("cliente.id"), nullable=False)
-    tipo = db.Column(db.String(10), nullable=False)   # 'cargo' (compra) o 'pago'
+    tipo = db.Column(db.String(10), nullable=False)
     monto = db.Column(db.Float, nullable=False, default=0.0)
     detalle = db.Column(db.String(200), default="")
     fecha = db.Column(db.DateTime, default=datetime.datetime.utcnow)
@@ -137,6 +130,7 @@ class Mensaje(db.Model):
     texto = db.Column(db.Text, default="")
     fecha = db.Column(db.DateTime, default=datetime.datetime.utcnow)
     leido = db.Column(db.Boolean, default=False)
+    rol = db.Column(db.String(10), default="cliente")      # cliente / bot
 
 
 class Pedido(db.Model):
@@ -144,15 +138,15 @@ class Pedido(db.Model):
     negocio_id = db.Column(db.Integer, db.ForeignKey("negocio.id"), nullable=False)
     de = db.Column(db.String(60), default="")
     detalle = db.Column(db.Text, default="")
-    total = db.Column(db.Float)                       # puede venir vacio
-    estado = db.Column(db.String(20), default="nuevo")  # nuevo / entregado
+    total = db.Column(db.Float)
+    estado = db.Column(db.String(20), default="nuevo")
     fecha = db.Column(db.DateTime, default=datetime.datetime.utcnow)
 
 
-def log_mensaje(negocio, de, texto):
-    """Guarda en la bandeja cada mensaje que entra (sin romper la respuesta)."""
+def log_mensaje(negocio, de, texto, rol="cliente"):
     try:
-        db.session.add(Mensaje(negocio_id=negocio.id, de=de or "", texto=texto or ""))
+        db.session.add(Mensaje(negocio_id=negocio.id, de=de or "",
+                               texto=texto or "", rol=rol))
         db.session.commit()
     except Exception as e:
         db.session.rollback()
@@ -160,87 +154,82 @@ def log_mensaje(negocio, de, texto):
 
 
 # ------------------------------------------------------------------
-# 4) Inteligencia: responde, toma pedidos y lee fotos
+# 4) EL CEREBRO UNIFICADO (molde) + memoria
 # ------------------------------------------------------------------
-def instrucciones(negocio):
-    return f"""Sos el empleado de atencion al cliente de "{negocio.nombre}", atendiendo por WhatsApp.
-Respondes en espanol rioplatense, amable y al grano (mensajes cortos para chat).
-Solo podes usar la informacion de esta lista de productos:
-
-{negocio.productos or '(todavia no cargaron productos)'}
-
-Reglas:
-- Si el producto esta en la lista, deci el precio y si hay stock.
-- Si no esta, deci que no lo manejas y ofrece uno parecido si existe.
-- Nunca inventes precios ni productos.
-- Cuando el cliente CONFIRME un pedido (te diga que si, dale, anotamelo), agrega al FINAL,
-  en una linea NUEVA y aparte, una linea EXACTA asi:
-  #PEDIDO# detalle: <productos y cantidades> | total: <monto en numeros>
-  Si el cliente todavia NO confirmo, NO pongas esa linea. Esa linea es solo para el sistema."""
+def asistente_de(negocio):
+    return molde.molde(
+        nombre=f"Empleado de {negocio.nombre}",
+        persona=("Atendes a los clientes por chat/WhatsApp, amable y al grano, en espanol "
+                 "rioplatense. Mensajes cortos como en WhatsApp."),
+        conocimiento=negocio.productos or "",
+        acciones=["tomar_pedido"],
+        modelo=(negocio.motor or "gemini"),
+        modelo_nombre=negocio.modelo_nombre,
+        base_url=negocio.base_url,
+        reglas="Nunca inventes precios ni productos. No des descuentos.",
+    )
 
 
-def responder_ia(negocio, texto):
+def _cliente_por_telefono(negocio, de):
+    digs = "".join(c for c in (de or "") if c.isdigit())[-8:]
+    if not digs:
+        return None
+    for c in Cliente.query.filter_by(negocio_id=negocio.id).all():
+        cd = "".join(ch for ch in (c.telefono or "") if ch.isdigit())[-8:]
+        if cd and cd == digs:
+            return c
+    return None
+
+
+def _memoria(negocio, de, limite=8):
+    msgs = (Mensaje.query.filter_by(negocio_id=negocio.id, de=de)
+            .order_by(Mensaje.fecha.desc()).limit(limite).all())
+    lineas = []
+    for m in reversed(msgs):
+        quien = "mAIte" if m.rol == "bot" else "cliente"
+        lineas.append(f"{quien}: {m.texto}")
+    return "\n".join(lineas)
+
+
+def atender(negocio, de, texto, rol="dueno", historial_externo=None):
+    """UN solo cerebro para todos los canales: memoria -> molde -> persistir -> responder."""
+    log_mensaje(negocio, de, texto, rol="cliente")
+    c = _cliente_por_telefono(negocio, de)
+    contexto_cli = f"(Datos del cliente: {c.nombre}, saldo ${c.saldo():.0f}.)\n" if c else ""
+    historial = historial_externo if historial_externo is not None else _memoria(negocio, de)
+    entrada = contexto_cli + (historial or ("cliente: " + texto))
+    ctx = {}
     try:
-        return cliente.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=instrucciones(negocio) + "\n\nConsulta del cliente: " + texto,
-        ).text
+        r = molde.pensar(asistente_de(negocio), entrada, rol=rol, contexto=ctx)
+        respuesta = (r.get("texto") or "").strip()
     except Exception as e:
-        print("ERROR:", e)
-        return "Perdon, tuve un problemita. Proba de nuevo en un rato."
-
-
-def extraer_pedido(negocio, de, texto):
-    """Si la IA marco un pedido confirmado, lo guarda y limpia la respuesta al cliente."""
-    if not texto or "#PEDIDO#" not in texto:
-        return texto
-    limpio = []
-    detalle = ""
-    total = None
-    for linea in texto.splitlines():
-        if "#PEDIDO#" in linea:
-            cuerpo = linea.split("#PEDIDO#", 1)[1].strip()
-            d = cuerpo
-            if "total:" in cuerpo.lower():
-                idx = cuerpo.lower().rfind("total:")
-                d = cuerpo[:idx]
-                t = cuerpo[idx + len("total:"):]
-                num = "".join(ch for ch in t if ch.isdigit() or ch == ".")
-                try:
-                    total = float(num) if num else None
-                except ValueError:
-                    total = None
-            if "detalle:" in d.lower():
-                d = d[d.lower().find("detalle:") + len("detalle:"):]
-            detalle = d.strip(" |")
-        else:
-            limpio.append(linea)
-    try:
+        print("atender:", e)
+        respuesta = "Perdon, tuve un problemita. Proba de nuevo."
+    for ped in ctx.get("pedidos", []):
+        total = ped.get("total")
+        try:
+            total = float(total) if total not in (None, "", "None") else None
+        except (ValueError, TypeError):
+            total = None
         db.session.add(Pedido(negocio_id=negocio.id, de=de or "",
-                              detalle=detalle, total=total))
-        db.session.commit()
-    except Exception as e:
-        db.session.rollback()
-        print("pedido:", e)
-    return "\n".join(limpio).strip()
+                              detalle=str(ped.get("detalle", "")), total=total))
+    db.session.commit()
+    log_mensaje(negocio, de, respuesta, rol="bot")
+    return respuesta or "Listo."
 
 
 def leer_lista_foto(img_bytes, mime):
-    """Le pasa una foto de la lista de precios a la IA y devuelve texto plano."""
     prompt = ("Esta es la foto de una lista de precios de un negocio. "
               "Devolve SOLO la lista en texto plano, un producto por linea, "
               "con formato 'Producto - $precio'. Si ves el stock, agregalo. "
               "No agregues comentarios, titulos ni explicaciones.")
     parte = types.Part.from_bytes(data=img_bytes, mime_type=mime)
-    resp = cliente.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=[parte, prompt],
-    )
+    resp = cliente.models.generate_content(model="gemini-2.5-flash", contents=[parte, prompt])
     return (resp.text or "").strip()
 
 
 # ------------------------------------------------------------------
-# 5) Webhook de Twilio (numero de prueba compartido)
+# 5) Webhooks (todos pasan por atender())
 # ------------------------------------------------------------------
 @app.route("/whatsapp", methods=["POST"])
 def whatsapp():
@@ -248,24 +237,16 @@ def whatsapp():
     para = request.form.get("To", "")
     de = request.form.get("From", "")
     twiml = MessagingResponse()
-
     negocio = Negocio.query.filter_by(whatsapp_to=para).first()
     if not negocio:
         negocio = Negocio.query.filter_by(whatsapp_to=NUMERO_SANDBOX).first()
     if not negocio:
         twiml.message("Este numero todavia no esta conectado a ningun negocio.")
         return str(twiml)
-
-    log_mensaje(negocio, de, pregunta)
-    respuesta = responder_ia(negocio, pregunta)
-    respuesta = extraer_pedido(negocio, de, respuesta)
-    twiml.message(respuesta)
+    twiml.message(atender(negocio, de, pregunta))
     return str(twiml)
 
 
-# ------------------------------------------------------------------
-# 5b) Webhook de WhatsApp Cloud API (Meta) - numero propio por negocio
-# ------------------------------------------------------------------
 @app.route("/meta", methods=["GET"])
 def meta_verificar():
     if request.args.get("hub.verify_token") == VERIFY_TOKEN:
@@ -284,18 +265,12 @@ def meta_mensaje():
         texto = msg.get("text", {}).get("body", "")
     except (KeyError, IndexError, TypeError):
         return "ok", 200
-
     if not permitido(de):
         return "ok", 200
-
     negocio = Negocio.query.filter_by(wa_phone_id=phone_id).first()
     if not negocio:
         return "ok", 200
-
-    log_mensaje(negocio, de, texto)
-    respuesta = responder_ia(negocio, texto)
-    respuesta = extraer_pedido(negocio, de, respuesta)
-    enviar_wa(phone_id, de, respuesta)
+    enviar_wa(phone_id, de, atender(negocio, de, texto))
     return "ok", 200
 
 
@@ -309,20 +284,14 @@ def registro():
         email = request.form.get("email", "").strip().lower()
         clave = request.form.get("clave", "")
         productos = request.form.get("productos", "").strip()
-
         if not nombre or not email or not clave:
             flash("Completa nombre, email y contrasena.")
             return redirect(url_for("registro"))
         if Negocio.query.filter_by(email=email).first():
             flash("Ese email ya esta registrado. Entra con tu cuenta.")
             return redirect(url_for("entrar"))
-
-        n = Negocio(
-            nombre=nombre,
-            email=email,
-            clave_hash=generate_password_hash(clave),
-            productos=productos,
-        )
+        n = Negocio(nombre=nombre, email=email,
+                    clave_hash=generate_password_hash(clave), productos=productos)
         db.session.add(n)
         db.session.commit()
         session["negocio_id"] = n.id
@@ -358,25 +327,23 @@ def negocio_actual():
 
 
 # ------------------------------------------------------------------
-# 7) Panel principal (Inicio, Productos, Clientes, Pedidos, Mi numero)
+# 7) Panel
 # ------------------------------------------------------------------
 @app.route("/panel", methods=["GET", "POST"])
 def panel():
     n = negocio_actual()
     if not n:
         return redirect(url_for("entrar"))
-
     if request.method == "POST":
         n.productos = request.form.get("productos", "").strip()
         db.session.commit()
         flash("Guardado. Tu empleado ya usa la lista nueva.")
         return redirect(url_for("panel") + "#productos")
-
     clientes = Cliente.query.filter_by(negocio_id=n.id).order_by(Cliente.nombre).all()
     total_cobrar = sum(c.saldo() for c in clientes if c.saldo() > 0)
-    mensajes = (Mensaje.query.filter_by(negocio_id=n.id)
+    mensajes = (Mensaje.query.filter_by(negocio_id=n.id, rol="cliente")
                 .order_by(Mensaje.fecha.desc()).limit(50).all())
-    nuevos = Mensaje.query.filter_by(negocio_id=n.id, leido=False).count()
+    nuevos = Mensaje.query.filter_by(negocio_id=n.id, rol="cliente", leido=False).count()
     pedidos = (Pedido.query.filter_by(negocio_id=n.id)
                .order_by(Pedido.fecha.desc()).limit(50).all())
     pedidos_nuevos = Pedido.query.filter_by(negocio_id=n.id, estado="nuevo").count()
@@ -386,7 +353,6 @@ def panel():
                            pedidos=pedidos, pedidos_nuevos=pedidos_nuevos)
 
 
-# --- Clientes ---
 @app.route("/clientes/nuevo", methods=["POST"])
 def clientes_nuevo():
     n = negocio_actual()
@@ -437,7 +403,6 @@ def cliente_mov(cid):
     return redirect(url_for("cliente_detalle", cid=c.id))
 
 
-# --- Pedidos (bandeja) ---
 @app.route("/pedidos/vistos", methods=["POST"])
 def pedidos_vistos():
     n = negocio_actual()
@@ -460,7 +425,6 @@ def pedido_entregado(pid):
     return redirect(url_for("panel") + "#pedidos")
 
 
-# --- Productos por foto ---
 @app.route("/panel/foto", methods=["POST"])
 def panel_foto():
     n = negocio_actual()
@@ -487,7 +451,6 @@ def panel_foto():
     return redirect(url_for("panel") + "#productos")
 
 
-# --- Mi numero propio (Meta) ---
 @app.route("/panel/numero", methods=["POST"])
 def panel_numero():
     n = negocio_actual()
@@ -500,20 +463,8 @@ def panel_numero():
 
 
 # ------------------------------------------------------------------
-# 7c) Chat estilo Claude: hablar con tu asistente (molde) desde la web
+# 7c) Chat web (mismo cerebro, via atender)
 # ------------------------------------------------------------------
-def asistente_de(negocio):
-    return molde.molde(
-        nombre=f"Empleado de {negocio.nombre}",
-        persona=("Atendes a los clientes por chat, amable y al grano, en espanol "
-                 "rioplatense. Mensajes cortos como en WhatsApp."),
-        conocimiento=negocio.productos or "",
-        acciones=["tomar_pedido"],
-        modelo="gemini",
-        reglas="Nunca inventes precios ni productos. No des descuentos.",
-    )
-
-
 @app.route("/chat")
 def chat():
     return send_from_directory(CARPETA, "chat.html")
@@ -526,28 +477,13 @@ def chat_enviar():
     n = negocio_actual() or Negocio.query.filter_by(whatsapp_to=NUMERO_SANDBOX).first()
     if not n or not msg:
         return {"respuesta": "Escribime algo y te ayudo."}
-    historial = ""
-    for m in (data.get("historial") or [])[-6:]:
-        quien = "cliente" if m.get("rol") == "user" else "vos"
-        historial += f"{quien}: {m.get('texto','')}\n"
-    entrada = historial + "cliente: " + msg
-    ctx = {}
-    try:
-        r = molde.pensar(asistente_de(n), entrada, rol="dueno", contexto=ctx)
-        respuesta = r["texto"]
-    except Exception as e:
-        print("chat:", e)
-        respuesta = "Perdon, tuve un problemita. Proba de nuevo."
-    for ped in ctx.get("pedidos", []):
-        total = ped.get("total")
-        try:
-            total = float(total) if total not in (None, "", "None") else None
-        except (ValueError, TypeError):
-            total = None
-        db.session.add(Pedido(negocio_id=n.id, de="chat web",
-                              detalle=str(ped.get("detalle", "")), total=total))
-    db.session.commit()
-    return {"respuesta": respuesta or "Listo."}
+    de = "web:" + str(session.get("negocio_id") or "demo")
+    hist = ""
+    for m in (data.get("historial") or [])[-8:]:
+        quien = "cliente" if m.get("rol") == "user" else "mAIte"
+        hist += f"{quien}: {m.get('texto','')}\n"
+    hist += "cliente: " + msg
+    return {"respuesta": atender(n, de, msg, historial_externo=hist)}
 
 
 # ------------------------------------------------------------------
@@ -569,7 +505,7 @@ def precios():
 
 
 # ------------------------------------------------------------------
-# 9) Despertador: el server se pinga a si mismo para no dormirse
+# 9) Despertador
 # ------------------------------------------------------------------
 SELF_URL = os.environ.get("RENDER_EXTERNAL_URL", "").strip()
 
@@ -588,7 +524,7 @@ if SELF_URL:
 
 
 # ------------------------------------------------------------------
-# 10) Crear las tablas + un negocio demo al arrancar
+# 10) Crear tablas + migraciones + demo
 # ------------------------------------------------------------------
 def iniciar():
     with app.app_context():
@@ -596,8 +532,14 @@ def iniciar():
         if db.engine.url.get_backend_name().startswith("postgres"):
             try:
                 from sqlalchemy import text
-                db.session.execute(text(
-                    "ALTER TABLE negocio ADD COLUMN IF NOT EXISTS wa_phone_id VARCHAR(40)"))
+                for sql in [
+                    "ALTER TABLE negocio ADD COLUMN IF NOT EXISTS wa_phone_id VARCHAR(40)",
+                    "ALTER TABLE negocio ADD COLUMN IF NOT EXISTS motor VARCHAR(20) DEFAULT 'gemini'",
+                    "ALTER TABLE negocio ADD COLUMN IF NOT EXISTS modelo_nombre VARCHAR(60)",
+                    "ALTER TABLE negocio ADD COLUMN IF NOT EXISTS base_url VARCHAR(200)",
+                    "ALTER TABLE mensaje ADD COLUMN IF NOT EXISTS rol VARCHAR(10) DEFAULT 'cliente'",
+                ]:
+                    db.session.execute(text(sql))
                 db.session.commit()
             except Exception as e:
                 db.session.rollback()
@@ -608,13 +550,9 @@ def iniciar():
                     prod = f.read()
             except FileNotFoundError:
                 prod = ""
-            demo = Negocio(
-                nombre="Distribuidora Demo",
-                email="demo@empleadodigital.app",
-                clave_hash=generate_password_hash("demo1234"),
-                whatsapp_to=NUMERO_SANDBOX,
-                productos=prod,
-            )
+            demo = Negocio(nombre="Distribuidora Demo", email="demo@empleadodigital.app",
+                           clave_hash=generate_password_hash("demo1234"),
+                           whatsapp_to=NUMERO_SANDBOX, productos=prod)
             db.session.add(demo)
             db.session.commit()
 

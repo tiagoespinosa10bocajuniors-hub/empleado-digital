@@ -13,36 +13,65 @@
 import os
 import json
 import re
+import urllib.request
 
 
 # ------------------------------------------------------------------
 # 1) MOTORES: un adaptador por proveedor. Mismo "enchufe" para todos.
 # ------------------------------------------------------------------
-def _motor_gemini(system, user, modelo="gemini-2.5-flash"):
+# Cada motor recibe (system, user, modelo, base_url) y devuelve texto.
+# Agregar un motor nuevo = UNA funcion + UNA linea en MOTORES.
+
+def _motor_gemini(system, user, modelo=None, base_url=None):
     from google import genai
     cli = genai.Client(api_key=os.environ.get("GEMINI_API_KEY", "").strip())
-    r = cli.models.generate_content(model=modelo, contents=system + "\n\n" + user)
+    r = cli.models.generate_content(model=modelo or "gemini-2.5-flash",
+                                    contents=system + "\n\n" + user)
     return r.text or ""
 
 
-def _motor_claude(system, user, modelo="claude-haiku-4-5-20251001"):
+def _motor_claude(system, user, modelo=None, base_url=None):
     import anthropic
     cli = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", "").strip())
-    r = cli.messages.create(model=modelo, max_tokens=1024, system=system,
+    r = cli.messages.create(model=modelo or "claude-haiku-4-5-20251001",
+                            max_tokens=1024, system=system,
                             messages=[{"role": "user", "content": user}])
     return "".join(b.text for b in r.content if getattr(b, "type", None) == "text")
 
 
-def _motor_gpt(system, user, modelo="gpt-4o-mini"):
+def _motor_openai(system, user, modelo=None, base_url=None):
+    # Sirve para GPT y para CUALQUIER motor "compatible con OpenAI":
+    # Groq, Together, OpenRouter, LM Studio... -> solo cambia base_url.
     from openai import OpenAI
-    cli = OpenAI(api_key=os.environ.get("OPENAI_API_KEY", "").strip())
-    r = cli.chat.completions.create(model=modelo, messages=[
+    cli = OpenAI(api_key=os.environ.get("OPENAI_API_KEY", "x"), base_url=base_url)
+    r = cli.chat.completions.create(model=modelo or "gpt-4o-mini", messages=[
         {"role": "system", "content": system},
         {"role": "user", "content": user}])
     return r.choices[0].message.content or ""
 
 
-MOTORES = {"gemini": _motor_gemini, "claude": _motor_claude, "gpt": _motor_gpt}
+def _motor_ollama(system, user, modelo=None, base_url=None):
+    # Modelos OPEN SOURCE corriendo en TU maquina (gratis y privado): Llama, Mistral...
+    base = (base_url or os.environ.get("OLLAMA_URL", "http://localhost:11434")).rstrip("/")
+    payload = json.dumps({
+        "model": modelo or "llama3.2",
+        "messages": [{"role": "system", "content": system},
+                     {"role": "user", "content": user}],
+        "stream": False,
+    }).encode()
+    req = urllib.request.Request(base + "/api/chat", data=payload,
+                                 headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=120) as r:
+        data = json.loads(r.read().decode())
+    return data.get("message", {}).get("content", "")
+
+
+MOTORES = {
+    "gemini": _motor_gemini,   # nube, capa gratis (lo que usas hoy)
+    "claude": _motor_claude,   # nube, pago, calidad
+    "gpt": _motor_openai,      # nube; tambien Groq/Together/OpenRouter via base_url
+    "ollama": _motor_ollama,   # LOCAL y gratis (Llama, Mistral) en tu maquina
+}
 
 
 # ------------------------------------------------------------------
@@ -81,13 +110,15 @@ def _agendar(args, ctx):
 # 3) EL MOLDE: la config de un asistente (los huecos que rellenas).
 # ------------------------------------------------------------------
 def molde(nombre, persona, conocimiento="", acciones=None, modelo="gemini",
-          permisos=None, canal="whatsapp", reglas=""):
+          modelo_nombre=None, base_url=None, permisos=None, canal="whatsapp", reglas=""):
     return {
         "nombre": nombre,
         "persona": persona,              # quien es y como habla
         "conocimiento": conocimiento,    # que sabe
         "acciones": acciones or [],      # que conectores tiene
-        "modelo": modelo,                # gemini / claude / gpt
+        "modelo": modelo,                # que MOTOR: gemini / claude / gpt / ollama
+        "modelo_nombre": modelo_nombre,  # cual modelo exacto (ej "llama3.2")
+        "base_url": base_url,            # para motores locales o compatibles
         "permisos": permisos or {},      # rol -> [acciones permitidas]
         "canal": canal,                  # donde vive
         "reglas": reglas,                # que NO puede hacer
@@ -123,7 +154,7 @@ def pensar(a, mensaje, rol="dueno", contexto=None):
     contexto = contexto if contexto is not None else {}
     system = _system_prompt(a, rol)
     motor = MOTORES.get(a["modelo"], _motor_gemini)
-    salida = motor(system, mensaje)
+    salida = motor(system, mensaje, modelo=a.get("modelo_nombre"), base_url=a.get("base_url"))
 
     permitidas = _permitidas(a, rol)
     limpio, resultados = [], []
@@ -169,4 +200,13 @@ PROFE_INGLES = molde(
     nombre="Profe de ingles",
     persona="Ensenas ingles con paciencia, corregis y das ejemplos cortos.",
     modelo="claude",
+)
+
+
+EMPLEADO_LOCAL = molde(
+    nombre="Empleado (modelo local, gratis)",
+    persona="Atendes por chat, amable y al grano, en espanol rioplatense.",
+    acciones=["tomar_pedido"],
+    modelo="ollama",
+    modelo_nombre="llama3.2",
 )
