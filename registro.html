@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Crear tu Empleado Digital</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="icon" type="image/svg+xml" href="/logo.svg">
+<style>
+  :root{--ink:#1d1d1f;--sub:#515154;--blue:#0071e3;--blue-d:#0077ed;--hair:#e6e6eb}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--ink);background:linear-gradient(180deg,#fbfdff 0%,#eef4fb 60%,#fff 100%);min-height:100vh;-webkit-font-smoothing:antialiased}
+  .top{height:54px;display:flex;align-items:center;border-bottom:1px solid var(--hair);background:rgba(255,255,255,.85);backdrop-filter:saturate(180%) blur(14px)}
+  .top .wrap{max-width:1000px;margin:0 auto;padding:0 22px;width:100%}
+  .brand{font-weight:700;font-size:16px;display:flex;align-items:center;gap:8px}
+  .card{max-width:440px;margin:48px auto;background:#fff;border:1px solid var(--hair);border-radius:26px;padding:34px 30px;box-shadow:0 30px 60px -22px rgba(20,40,80,.18)}
+  h1{font-size:28px;font-weight:800;letter-spacing:-.8px;text-align:center}
+  .lead{font-size:15px;color:var(--sub);text-align:center;margin:8px 0 24px}
+  label{display:block;font-size:14px;font-weight:600;margin:14px 0 6px}
+  input,textarea{width:100%;border:1px solid var(--hair);border-radius:13px;padding:13px 14px;font-size:16px;font-family:inherit;background:#fff;transition:.15s}
+  input:focus,textarea:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 4px rgba(0,113,227,.12)}
+  textarea{min-height:110px;resize:vertical}
+  .hint{font-size:12px;color:#86868b;margin-top:5px}
+  .pill{display:block;width:100%;background:var(--blue);color:#fff;font-weight:600;font-size:17px;padding:14px;border:none;border-radius:980px;cursor:pointer;margin-top:24px;transition:.2s}
+  .pill:hover{background:var(--blue-d)}
+  .alt{text-align:center;font-size:14px;color:var(--sub);margin-top:18px}
+  .alt a{color:var(--blue);font-weight:600;text-decoration:none}
+  .flash{background:#fff4f4;border:1px solid #ffd7d7;color:#c0362c;font-size:14px;padding:11px 14px;border-radius:12px;margin-bottom:14px}
+</style>
+</head>
+<body>
+<div class="top"><div class="wrap"><a href="/" class="brand" style="color:inherit;text-decoration:none"><img src="/logo.svg" width="26" height="26" style="border-radius:6px"> Empleado Digital</a></div></div>
+
+<div class="card">
+  <h1>Creá tu empleado</h1>
+  <p class="lead">Gratis para empezar. Sin tarjeta.</p>
+
+  {% with mensajes = get_flashed_messages() %}
+    {% if mensajes %}{% for m in mensajes %}<div class="flash">{{ m }}</div>{% endfor %}{% endif %}
+  {% endwith %}
+
+  <form method="POST" action="/registro">
+    <label>Nombre del negocio</label>
+    <input name="nombre" placeholder="Ej: Distribuidora San Martín" required>
+
+    <label>Email</label>
+    <input name="email" type="email" placeholder="vos@ejemplo.com" required>
+
+    <label>Contraseña</label>
+    <input name="clave" type="password" placeholder="Elegí una contraseña" required>
+
+    <label>Tus productos <span style="font-weight:400;color:#86868b">(opcional, lo podés cargar después)</span></label>
+    <textarea name="productos" placeholder="Coca 2.25L - $2.500 - stock 48&#10;Fernet Branca 750ml - $9.500 - stock 24"></textarea>
+    <p class="hint">Una línea por producto: nombre - precio - stock.</p>
+
+    <button class="pill" type="submit">Crear mi empleado</button>
+  </form>
+
+  <p class="alt">¿Ya tenés cuenta? <a href="/entrar">Entrá acá</a></p>
+</div>
+</body>
+</html>
