@@ -23,14 +23,18 @@
   .card h2{font-size:18px;font-weight:700;letter-spacing:-.3px;margin-bottom:6px}
   .card p{font-size:15px;color:var(--sub);line-height:1.55}
   .num{display:inline-block;background:#eef4fb;color:var(--blue);font-weight:700;border-radius:10px;padding:7px 12px;margin-top:10px;font-size:15px}
+  .ok-badge{display:inline-block;background:#eafaf0;color:#1c7a43;font-weight:700;border-radius:10px;padding:7px 12px;margin-top:10px;font-size:14px}
   .step{font-size:14.5px;color:var(--sub);line-height:1.7;margin-top:8px}
   .step b{color:var(--ink)}
   label{display:block;font-size:14px;font-weight:600;margin:4px 0 8px}
-  textarea{width:100%;border:1px solid var(--hair);border-radius:14px;padding:14px;font-size:15px;font-family:inherit;min-height:240px;resize:vertical;line-height:1.5}
-  textarea:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 4px rgba(0,113,227,.12)}
+  textarea,input.inp{width:100%;border:1px solid var(--hair);border-radius:14px;padding:14px;font-size:15px;font-family:inherit;line-height:1.5}
+  textarea{min-height:240px;resize:vertical}
+  textarea:focus,input.inp:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 4px rgba(0,113,227,.12)}
   .pill{display:inline-block;background:var(--blue);color:#fff;font-weight:600;font-size:16px;padding:12px 26px;border:none;border-radius:980px;cursor:pointer;margin-top:16px;transition:.2s}
   .pill:hover{background:var(--blue-d)}
   .ok{background:#eafaf0;border:1px solid #b7ebc9;color:#1c7a43;font-size:14px;padding:11px 14px;border-radius:12px;margin-top:16px}
+  details{margin-top:8px}
+  summary{cursor:pointer;font-size:14px;color:var(--blue);font-weight:600}
 </style>
 </head>
 <body>
@@ -49,7 +53,10 @@
 
   <div class="card">
     <h2>Conexión de WhatsApp</h2>
-    {% if n.whatsapp_to %}
+    {% if n.wa_phone_id %}
+      <p>Conectado por <b>tu número propio</b> (WhatsApp de Meta).</p>
+      <div class="ok-badge">✓ Número propio · ID {{ n.wa_phone_id }}</div>
+    {% elif n.whatsapp_to %}
       <p>Tu empleado atiende en este número:</p>
       <div class="num">{{ n.whatsapp_to.replace('whatsapp:', '') }}</div>
     {% else %}
@@ -59,8 +66,17 @@
         2. Mandale por WhatsApp: <b>join dream-remarkable</b><br>
         3. Escribile como si fueras un cliente y te responde.
       </div>
-      <p style="margin-top:14px;font-size:13.5px;color:#86868b">En la versión de prueba ese número es compartido. Cuando saques tu propio número, tus clientes te escriben directo a vos y el empleado usa solo tu lista.</p>
+      <p style="margin-top:14px;font-size:13.5px;color:#86868b">En la versión de prueba ese número es compartido. Cuando conectes tu propio número, tus clientes te escriben directo a vos.</p>
     {% endif %}
+
+    <details>
+      <summary>Conectar mi número propio (avanzado)</summary>
+      <p style="margin:10px 0 6px">Si ya conectaste tu WhatsApp en Meta, pegá acá el <b>Phone Number ID</b> que te da Meta. Si no sabés qué es, dejalo así — lo hacemos juntos.</p>
+      <form method="POST" action="/panel/numero">
+        <input class="inp" name="wa_phone_id" value="{{ n.wa_phone_id or '' }}" placeholder="Ej: 123456789012345">
+        <button class="pill" type="submit">Guardar número</button>
+      </form>
+    </details>
   </div>
 
   <div class="card">

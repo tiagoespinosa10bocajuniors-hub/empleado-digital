@@ -2,12 +2,14 @@
 # Un solo servidor que atiende a muchos negocios.
 # - Cada negocio se registra, entra y carga SUS productos.
 # - Cuando llega un WhatsApp, busca de que negocio es y responde con SU lista.
+# - Soporta el numero de prueba de Twilio (sandbox) Y el numero propio por Meta.
 
 import os
 import datetime
 import threading
 import time
 import urllib.request
+import json
 from flask import (Flask, request, send_from_directory, render_template,
                    redirect, url_for, session, flash)
 from twilio.twiml.messaging_response import MessagingResponse
@@ -35,8 +37,6 @@ cliente = genai.Client(api_key=API_KEY)
 app = Flask(__name__, template_folder=CARPETA)
 app.secret_key = os.environ.get("SECRET_KEY", "cambiar-esta-clave-secreta-en-produccion")
 
-# La base de datos viene de DATABASE_URL (Postgres en la nube, no se borra).
-# Si no esta, usa un archivo local (solo para probar en tu compu).
 DB_URL = os.environ.get("DATABASE_URL", "").strip()
 if DB_URL.startswith("postgres://"):
     DB_URL = DB_URL.replace("postgres://", "postgresql://", 1)
@@ -49,6 +49,30 @@ db = SQLAlchemy(app)
 # Numero de prueba de Twilio (el "sandbox"). Es compartido por ahora.
 NUMERO_SANDBOX = "whatsapp:+14155238886"
 
+# --- WhatsApp Cloud API (Meta): para el numero propio de cada negocio ---
+WHATSAPP_TOKEN = os.environ.get("WHATSAPP_TOKEN", "").strip()
+VERIFY_TOKEN = os.environ.get("WHATSAPP_VERIFY_TOKEN", "empleado-digital-verify").strip()
+WA_API = os.environ.get("WHATSAPP_API_VERSION", "v21.0").strip()
+
+
+def enviar_wa(phone_id, to, body):
+    """Envia un mensaje de WhatsApp por la API de Meta."""
+    url = f"https://graph.facebook.com/{WA_API}/{phone_id}/messages"
+    payload = json.dumps({
+        "messaging_product": "whatsapp",
+        "to": to,
+        "type": "text",
+        "text": {"body": body},
+    }).encode()
+    req = urllib.request.Request(url, data=payload, headers={
+        "Authorization": "Bearer " + WHATSAPP_TOKEN,
+        "Content-Type": "application/json",
+    })
+    try:
+        urllib.request.urlopen(req, timeout=20)
+    except Exception as e:
+        print("WA send error:", e)
+
 
 # Cada fila = un negocio.
 class Negocio(db.Model):
@@ -56,7 +80,8 @@ class Negocio(db.Model):
     nombre = db.Column(db.String(120), nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
     clave_hash = db.Column(db.String(255), nullable=False)
-    whatsapp_to = db.Column(db.String(40))
+    whatsapp_to = db.Column(db.String(40))          # numero de Twilio (sandbox)
+    wa_phone_id = db.Column(db.String(40))          # ID del numero propio (Meta)
     productos = db.Column(db.Text, default="")
     creado = db.Column(db.DateTime, default=datetime.datetime.utcnow)
 
@@ -75,8 +100,20 @@ Reglas:
 - Nunca inventes precios ni productos."""
 
 
+def responder_ia(negocio, texto):
+    """Le pregunta a Gemini con el contexto del negocio. Devuelve el texto."""
+    try:
+        return cliente.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=instrucciones(negocio) + "\n\nConsulta del cliente: " + texto,
+        ).text
+    except Exception as e:
+        print("ERROR:", e)
+        return "Perdon, tuve un problemita. Proba de nuevo en un rato."
+
+
 # ------------------------------------------------------------------
-# 3) Webhook de WhatsApp: busca el negocio y responde con SU lista
+# 3) Webhook de Twilio (numero de prueba compartido)
 # ------------------------------------------------------------------
 @app.route("/whatsapp", methods=["POST"])
 def whatsapp():
@@ -91,16 +128,39 @@ def whatsapp():
         twiml.message("Este numero todavia no esta conectado a ningun negocio.")
         return str(twiml)
 
-    try:
-        respuesta = cliente.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=instrucciones(negocio) + "\n\nConsulta del cliente: " + pregunta,
-        )
-        twiml.message(respuesta.text)
-    except Exception as e:
-        twiml.message("Perdon, tuve un problemita. Proba de nuevo en un rato.")
-        print("ERROR:", e)
+    twiml.message(responder_ia(negocio, pregunta))
     return str(twiml)
+
+
+# ------------------------------------------------------------------
+# 3b) Webhook de WhatsApp Cloud API (Meta) - numero propio por negocio
+# ------------------------------------------------------------------
+@app.route("/meta", methods=["GET"])
+def meta_verificar():
+    # Meta valida el webhook con este "apreton de manos"
+    if request.args.get("hub.verify_token") == VERIFY_TOKEN:
+        return request.args.get("hub.challenge", ""), 200
+    return "token invalido", 403
+
+
+@app.route("/meta", methods=["POST"])
+def meta_mensaje():
+    data = request.get_json(silent=True) or {}
+    try:
+        value = data["entry"][0]["changes"][0]["value"]
+        phone_id = str(value["metadata"]["phone_number_id"])
+        msg = value["messages"][0]
+        de = msg["from"]
+        texto = msg.get("text", {}).get("body", "")
+    except (KeyError, IndexError, TypeError):
+        return "ok", 200  # estados de entrega u otros eventos: ignorar
+
+    negocio = Negocio.query.filter_by(wa_phone_id=phone_id).first()
+    if not negocio:
+        return "ok", 200
+
+    enviar_wa(phone_id, de, responder_ia(negocio, texto))
+    return "ok", 200
 
 
 # ------------------------------------------------------------------
@@ -158,7 +218,7 @@ def salir():
 
 
 # ------------------------------------------------------------------
-# 6) Panel: el negocio edita sus productos
+# 6) Panel: el negocio edita sus productos y conecta su numero
 # ------------------------------------------------------------------
 @app.route("/panel", methods=["GET", "POST"])
 def panel():
@@ -178,6 +238,19 @@ def panel():
     return render_template("panel.html", n=n, sandbox=NUMERO_SANDBOX)
 
 
+@app.route("/panel/numero", methods=["POST"])
+def panel_numero():
+    nid = session.get("negocio_id")
+    if not nid:
+        return redirect(url_for("entrar"))
+    n = db.session.get(Negocio, nid)
+    if n:
+        n.wa_phone_id = (request.form.get("wa_phone_id", "").strip() or None)
+        db.session.commit()
+        flash("Guardado. Avisanos para terminar de activar tu numero.")
+    return redirect(url_for("panel"))
+
+
 # ------------------------------------------------------------------
 # 7) Landing y archivos
 # ------------------------------------------------------------------
@@ -192,11 +265,41 @@ def logo():
 
 
 # ------------------------------------------------------------------
-# 8) Crear las tablas + un negocio demo al arrancar
+# 8) Despertador: el server se pinga a si mismo para no dormirse
+# ------------------------------------------------------------------
+SELF_URL = os.environ.get("RENDER_EXTERNAL_URL", "").strip()
+
+
+def mantener_despierto():
+    while True:
+        time.sleep(600)  # cada 10 minutos
+        try:
+            urllib.request.urlopen(SELF_URL, timeout=20)
+        except Exception as e:
+            print("keepalive:", e)
+
+
+if SELF_URL:
+    threading.Thread(target=mantener_despierto, daemon=True).start()
+
+
+# ------------------------------------------------------------------
+# 9) Crear las tablas + un negocio demo al arrancar
 # ------------------------------------------------------------------
 def iniciar():
     with app.app_context():
         db.create_all()
+        # si la tabla ya existia, agrega la columna nueva (solo Postgres)
+        if db.engine.url.get_backend_name().startswith("postgres"):
+            try:
+                from sqlalchemy import text
+                db.session.execute(text(
+                    "ALTER TABLE negocio ADD COLUMN IF NOT EXISTS wa_phone_id VARCHAR(40)"))
+                db.session.commit()
+            except Exception as e:
+                db.session.rollback()
+                print("migracion:", e)
+        # negocio demo para que el sandbox siga respondiendo
         if not Negocio.query.filter_by(whatsapp_to=NUMERO_SANDBOX).first():
             try:
                 with open(os.path.join(CARPETA, "productos.txt"), "r", encoding="utf-8-sig") as f:
@@ -215,26 +318,6 @@ def iniciar():
 
 
 iniciar()
-
-# ------------------------------------------------------------------
-# 9) Despertador: el server se pinga a si mismo para no dormirse
-#    (Render pone RENDER_EXTERNAL_URL solo en la nube)
-# ------------------------------------------------------------------
-SELF_URL = os.environ.get("RENDER_EXTERNAL_URL", "").strip()
-
-
-def mantener_despierto():
-    while True:
-        time.sleep(600)  # cada 10 minutos
-        try:
-            urllib.request.urlopen(SELF_URL, timeout=20)
-        except Exception as e:
-            print("keepalive:", e)
-
-
-if SELF_URL:
-    threading.Thread(target=mantener_despierto, daemon=True).start()
-
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
