@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Probá tu empleado · Empleado Digital</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="icon" type="image/svg+xml" href="/logo.svg">
+<style>
+  :root{--ink:#1f1e1d;--sub:#6b6a67;--accent:#0071e3;--bg:#f7f7f6;--card:#fff;--hair:#e9e9e6;--bubble:#ececef}
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--ink);background:var(--bg);-webkit-font-smoothing:antialiased;display:flex;flex-direction:column;height:100dvh}
+  a{color:inherit;text-decoration:none}
+
+  header{height:56px;flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;padding:0 18px;background:rgba(247,247,246,.85);backdrop-filter:saturate(180%) blur(14px);border-bottom:1px solid var(--hair)}
+  .brand{display:flex;align-items:center;gap:9px;font-weight:600;font-size:15px}
+  .brand img{width:24px;height:24px;border-radius:6px;display:block}
+  header .back{font-size:14px;color:var(--accent);font-weight:500}
+
+  .scroll{flex:1 1 auto;overflow-y:auto}
+  .col{max-width:720px;margin:0 auto;padding:30px 18px 24px}
+
+  .msg{display:flex;gap:12px;margin-bottom:26px;align-items:flex-start}
+  .msg .av{flex:0 0 auto;width:28px;height:28px;border-radius:8px;background:var(--ink);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;margin-top:2px}
+  .msg .body{flex:1;min-width:0}
+  .msg .name{font-size:13px;font-weight:600;color:var(--sub);margin-bottom:4px}
+  .msg .txt{font-size:16px;line-height:1.6;white-space:pre-wrap;word-wrap:break-word}
+
+  .msg.user{justify-content:flex-end}
+  .msg.user .bubble{background:var(--bubble);border-radius:18px;padding:11px 16px;font-size:16px;line-height:1.5;max-width:80%}
+
+  .dots span{display:inline-block;width:7px;height:7px;border-radius:50%;background:#b9b9b4;margin-right:4px;animation:b 1.2s infinite}
+  .dots span:nth-child(2){animation-delay:.2s}.dots span:nth-child(3){animation-delay:.4s}
+  @keyframes b{0%,60%,100%{opacity:.3;transform:translateY(0)}30%{opacity:1;transform:translateY(-3px)}}
+
+  .composer{flex:0 0 auto;border-top:1px solid var(--hair);background:var(--bg)}
+  .cwrap{max-width:720px;margin:0 auto;padding:12px 18px 18px}
+  .box{display:flex;align-items:flex-end;gap:8px;background:var(--card);border:1px solid var(--hair);border-radius:24px;padding:8px 8px 8px 18px;box-shadow:0 2px 10px -6px rgba(0,0,0,.12)}
+  .box textarea{flex:1;border:none;outline:none;resize:none;font:inherit;font-size:16px;line-height:1.5;max-height:140px;background:transparent;color:var(--ink);padding:7px 0}
+  .send{flex:0 0 auto;width:38px;height:38px;border-radius:50%;border:none;background:var(--accent);color:#fff;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:.15s}
+  .send:disabled{background:#cfcfca;cursor:default}
+  .hint{text-align:center;color:#a3a39e;font-size:12px;margin-top:8px}
+  .chip{display:inline-block;background:var(--card);border:1px solid var(--hair);border-radius:980px;padding:8px 14px;font-size:14px;color:var(--ink);margin:0 6px 8px 0;cursor:pointer}
+  .chip:hover{border-color:var(--accent);color:var(--accent)}
+</style>
+</head>
+<body>
+<header>
+  <a class="brand" href="/"><img src="/logo.svg" alt=""> Empleado Digital</a>
+  <a class="back" href="/panel">Mi panel</a>
+</header>
+
+<div class="scroll" id="scroll">
+  <div class="col" id="col">
+    <div class="msg bot">
+      <div class="av">E</div>
+      <div class="body">
+        <div class="name">Tu empleado</div>
+        <div class="txt">¡Hola! 👋 Soy tu empleado. Preguntame por un producto, un precio, o pedime que te anote un pedido. Probá:</div>
+        <div style="margin-top:12px">
+          <span class="chip" onclick="usar(this)">¿Tenés coca de 2 litros?</span>
+          <span class="chip" onclick="usar(this)">¿Cuánto sale el fernet?</span>
+          <span class="chip" onclick="usar(this)">Anotame 6 cocas y un fernet</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="composer">
+  <div class="cwrap">
+    <div class="box">
+      <textarea id="inp" rows="1" placeholder="Escribile a tu empleado..."></textarea>
+      <button class="send" id="send" onclick="enviar()">↑</button>
+    </div>
+    <div class="hint">Tu empleado usa tu lista de productos. Enter para enviar.</div>
+  </div>
+</div>
+
+<script>
+  var col=document.getElementById('col'), scroll=document.getElementById('scroll'),
+      inp=document.getElementById('inp'), send=document.getElementById('send');
+  var historial=[], pensando=false;
+
+  function abajo(){scroll.scrollTop=scroll.scrollHeight}
+  function esc(t){var d=document.createElement('div');d.textContent=t;return d.innerHTML}
+
+  function pintarUser(t){
+    var d=document.createElement('div');d.className='msg user';
+    d.innerHTML='<div class="bubble">'+esc(t)+'</div>';
+    col.appendChild(d);abajo();
+  }
+  function pintarBot(t){
+    var d=document.createElement('div');d.className='msg bot';
+    d.innerHTML='<div class="av">E</div><div class="body"><div class="name">Tu empleado</div><div class="txt">'+esc(t)+'</div></div>';
+    col.appendChild(d);abajo();
+  }
+  function pintarTyping(){
+    var d=document.createElement('div');d.className='msg bot';d.id='typing';
+    d.innerHTML='<div class="av">E</div><div class="body"><div class="name">Tu empleado</div><div class="dots"><span></span><span></span><span></span></div></div>';
+    col.appendChild(d);abajo();
+  }
+  function quitarTyping(){var t=document.getElementById('typing');if(t)t.remove();}
+
+  function usar(el){inp.value=el.textContent;inp.focus();auto();}
+  function auto(){inp.style.height='auto';inp.style.height=Math.min(inp.scrollHeight,140)+'px';}
+  inp.addEventListener('input',auto);
+  inp.addEventListener('keydown',function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();enviar();}});
+
+  function enviar(){
+    var t=inp.value.trim();
+    if(!t||pensando)return;
+    pintarUser(t);
+    historial.push({rol:'user',texto:t});
+    inp.value='';auto();
+    pensando=true;send.disabled=true;
+    pintarTyping();
+    fetch('/chat/enviar',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({mensaje:t,historial:historial.slice(-8)})})
+      .then(function(r){return r.json()})
+      .then(function(d){
+        quitarTyping();
+        var resp=(d&&d.respuesta)?d.respuesta:'Perdón, no te entendí. Probá de nuevo.';
+        pintarBot(resp);
+        historial.push({rol:'bot',texto:resp});
+      })
+      .catch(function(){quitarTyping();pintarBot('Uh, se me cayó la conexión. Probá de nuevo.');})
+      .finally(function(){pensando=false;send.disabled=false;inp.focus();});
+  }
+  inp.focus();
+</script>
+</body>
+</html>

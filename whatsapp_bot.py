@@ -18,6 +18,7 @@ from google import genai
 from google.genai import types
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
+import molde
 
 CARPETA = os.path.dirname(os.path.abspath(__file__))
 
@@ -496,6 +497,57 @@ def panel_numero():
     db.session.commit()
     flash("Guardado. Avisanos para terminar de activar tu numero.")
     return redirect(url_for("panel") + "#numero")
+
+
+# ------------------------------------------------------------------
+# 7c) Chat estilo Claude: hablar con tu asistente (molde) desde la web
+# ------------------------------------------------------------------
+def asistente_de(negocio):
+    return molde.molde(
+        nombre=f"Empleado de {negocio.nombre}",
+        persona=("Atendes a los clientes por chat, amable y al grano, en espanol "
+                 "rioplatense. Mensajes cortos como en WhatsApp."),
+        conocimiento=negocio.productos or "",
+        acciones=["tomar_pedido"],
+        modelo="gemini",
+        reglas="Nunca inventes precios ni productos. No des descuentos.",
+    )
+
+
+@app.route("/chat")
+def chat():
+    return send_from_directory(CARPETA, "chat.html")
+
+
+@app.route("/chat/enviar", methods=["POST"])
+def chat_enviar():
+    data = request.get_json(silent=True) or {}
+    msg = (data.get("mensaje") or "").strip()
+    n = negocio_actual() or Negocio.query.filter_by(whatsapp_to=NUMERO_SANDBOX).first()
+    if not n or not msg:
+        return {"respuesta": "Escribime algo y te ayudo."}
+    historial = ""
+    for m in (data.get("historial") or [])[-6:]:
+        quien = "cliente" if m.get("rol") == "user" else "vos"
+        historial += f"{quien}: {m.get('texto','')}\n"
+    entrada = historial + "cliente: " + msg
+    ctx = {}
+    try:
+        r = molde.pensar(asistente_de(n), entrada, rol="dueno", contexto=ctx)
+        respuesta = r["texto"]
+    except Exception as e:
+        print("chat:", e)
+        respuesta = "Perdon, tuve un problemita. Proba de nuevo."
+    for ped in ctx.get("pedidos", []):
+        total = ped.get("total")
+        try:
+            total = float(total) if total not in (None, "", "None") else None
+        except (ValueError, TypeError):
+            total = None
+        db.session.add(Pedido(negocio_id=n.id, de="chat web",
+                              detalle=str(ped.get("detalle", "")), total=total))
+    db.session.commit()
+    return {"respuesta": respuesta or "Listo."}
 
 
 # ------------------------------------------------------------------
