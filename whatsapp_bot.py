@@ -511,6 +511,11 @@ def logo():
     return send_from_directory(CARPETA, "logo.svg")
 
 
+@app.route("/precios")
+def precios():
+    return send_from_directory(CARPETA, "precios.html")
+
+
 # ------------------------------------------------------------------
 # 9) Despertador: el server se pinga a si mismo para no dormirse
 # ------------------------------------------------------------------

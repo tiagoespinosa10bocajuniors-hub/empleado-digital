@@ -96,7 +96,7 @@
 <nav>
   <div class="wrap" style="display:flex;align-items:center;justify-content:space-between;width:100%">
     <div class="brand"><img src="logo.svg" alt="" width="26" height="26" style="border-radius:6px;display:block"> Empleado Digital</div>
-    <a href="/entrar" class="enter">Entrar</a>
+    <div style="display:flex;gap:18px;align-items:center"><a href="/precios" class="enter">Precios</a><a href="/entrar" class="enter">Entrar</a></div>
   </div>
 </nav>
 
@@ -175,7 +175,4 @@
   function openOb(){document.getElementById('ob').classList.add('on');goStep(1)}
   function closeOb(){document.getElementById('ob').classList.remove('on')}
   function goStep(n){document.querySelectorAll('.screen').forEach(function(s){s.style.display=(s.getAttribute('data-step')==String(n))?'block':'none'})}
-  document.getElementById('ob').addEventListener('click',function(e){if(e.target===this)closeOb()});
-</script>
-</body>
-</html>
+  document.getElementById('ob').addEventListener('click',function(e){i
