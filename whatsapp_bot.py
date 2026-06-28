@@ -53,6 +53,16 @@ NUMERO_SANDBOX = "whatsapp:+14155238886"
 WHATSAPP_TOKEN = os.environ.get("WHATSAPP_TOKEN", "").strip()
 VERIFY_TOKEN = os.environ.get("WHATSAPP_VERIFY_TOKEN", "empleado-digital-verify").strip()
 WA_API = os.environ.get("WHATSAPP_API_VERSION", "v21.0").strip()
+# Modo prueba: si WA_TEST_FROM tiene numeros, el bot SOLO responde a esos (por Meta).
+WA_TEST_FROM = os.environ.get("WA_TEST_FROM", "").strip()
+
+
+def permitido(de):
+    """En modo prueba, solo responde a los numeros autorizados (ignora al resto)."""
+    if not WA_TEST_FROM:
+        return True
+    autorizados = ["".join(c for c in n if c.isdigit()) for n in WA_TEST_FROM.split(",")]
+    return "".join(c for c in de if c.isdigit()) in autorizados
 
 
 def enviar_wa(phone_id, to, body):
@@ -154,6 +164,10 @@ def meta_mensaje():
         texto = msg.get("text", {}).get("body", "")
     except (KeyError, IndexError, TypeError):
         return "ok", 200  # estados de entrega u otros eventos: ignorar
+
+    # Modo prueba: si esta activo, ignora a los que no estan autorizados
+    if not permitido(de):
+        return "ok", 200
 
     negocio = Negocio.query.filter_by(wa_phone_id=phone_id).first()
     if not negocio:
