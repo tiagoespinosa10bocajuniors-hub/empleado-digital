@@ -347,10 +347,12 @@ def panel():
     pedidos = (Pedido.query.filter_by(negocio_id=n.id)
                .order_by(Pedido.fecha.desc()).limit(50).all())
     pedidos_nuevos = Pedido.query.filter_by(negocio_id=n.id, estado="nuevo").count()
+    motor_op = {"gemini": "nube", "ollama": "local", "gpt": "servidor"}.get(n.motor or "gemini", "nube")
     return render_template("panel.html", n=n, sandbox=NUMERO_SANDBOX,
                            clientes=clientes, total_cobrar=total_cobrar,
                            mensajes=mensajes, nuevos=nuevos,
-                           pedidos=pedidos, pedidos_nuevos=pedidos_nuevos)
+                           pedidos=pedidos, pedidos_nuevos=pedidos_nuevos,
+                           motor_op=motor_op)
 
 
 @app.route("/clientes/nuevo", methods=["POST"])
@@ -460,6 +462,25 @@ def panel_numero():
     db.session.commit()
     flash("Guardado. Avisanos para terminar de activar tu numero.")
     return redirect(url_for("panel") + "#numero")
+
+
+@app.route("/panel/motor", methods=["POST"])
+def panel_motor():
+    n = negocio_actual()
+    if not n:
+        return redirect(url_for("entrar"))
+    op = request.form.get("opcion", "nube")
+    mn = (request.form.get("modelo_nombre", "").strip() or None)
+    bu = (request.form.get("base_url", "").strip() or None)
+    if op == "local":
+        n.motor = "ollama"; n.modelo_nombre = mn or "llama3.2"; n.base_url = bu
+    elif op == "servidor":
+        n.motor = "gpt"; n.modelo_nombre = mn; n.base_url = bu
+    else:
+        n.motor = "gemini"; n.modelo_nombre = None; n.base_url = None
+    db.session.commit()
+    flash("Motor actualizado.")
+    return redirect(url_for("panel") + "#motor")
 
 
 # ------------------------------------------------------------------

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Panel · Empleado Digital</title>
+<title>Panel · mAIte</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="icon" type="image/svg+xml" href="/logo.svg">
@@ -71,13 +71,19 @@
   .banner .l{font-size:12px;color:var(--sub)}
   code{background:#f0f0f3;padding:2px 7px;border-radius:6px;font-size:13px}
   .subh{font-size:17px;font-weight:600;margin:26px 0 10px}
+  .op3{display:flex;gap:10px;flex-wrap:wrap}
+  .op3 label{flex:1;min-width:150px;border:1px solid var(--hair);border-radius:14px;padding:13px 14px;cursor:pointer}
+  .op3 label.on{border-color:var(--blue);background:#f5faff}
+  .op3 input{display:none}
+  .op3 b{display:block;font-size:15px;margin-bottom:2px}
+  .op3 span{color:var(--sub);font-size:12.5px}
 </style>
 </head>
 <body>
 
 <header>
   <div class="wrap" style="display:flex;align-items:center;justify-content:space-between;width:100%">
-    <div class="brand"><img src="/logo.svg" alt=""> Empleado Digital</div>
+    <div class="brand"><img src="/logo.svg" alt=""> mAIte</div>
     <div class="who"><span>{{ n.nombre }}</span><a href="/salir">Salir</a></div>
   </div>
 </header>
@@ -90,6 +96,7 @@
     <button class="tab" data-t="clientes">Clientes</button>
     <button class="tab" data-t="pedidos">Pedidos{% if pedidos_nuevos %}<span class="badge">{{ pedidos_nuevos }}</span>{% endif %}</button>
     <button class="tab" data-t="numero">Mi número</button>
+    <button class="tab" data-t="motor">Motor</button>
   </div>
 
   {% with messages = get_flashed_messages() %}
@@ -240,6 +247,27 @@
         <input name="wa_phone_id" placeholder="Ej: 1158116877392655" value="{{ n.wa_phone_id or '' }}">
         <button class="btn" type="submit">Guardar número</button>
       </form>
+    </div>
+  </section>
+
+  <!-- MOTOR -->
+  <section id="motor">
+    <h2>Motor de tu mAIte</h2>
+    <p class="lead">¿Dónde vive la IA de tu asistente? Por defecto, en la nube — gratis.</p>
+    <div class="card">
+      <form action="/panel/motor" method="post">
+        <div class="op3">
+          <label class="{{ 'on' if motor_op=='nube' else '' }}"><input type="radio" name="opcion" value="nube" {{ 'checked' if motor_op=='nube' else '' }}><b>☁️ Nube</b><span>Gemini · gratis · recomendado</span></label>
+          <label class="{{ 'on' if motor_op=='local' else '' }}"><input type="radio" name="opcion" value="local" {{ 'checked' if motor_op=='local' else '' }}><b>💻 Local</b><span>Ollama en tu máquina · privado</span></label>
+          <label class="{{ 'on' if motor_op=='servidor' else '' }}"><input type="radio" name="opcion" value="servidor" {{ 'checked' if motor_op=='servidor' else '' }}><b>🖥️ Servidor</b><span>Open source en tu server</span></label>
+        </div>
+        <div class="row" style="margin-top:14px">
+          <div><label>Modelo (opcional)</label><input name="modelo_nombre" placeholder="ej: llama3.2" value="{{ n.modelo_nombre or '' }}"></div>
+          <div><label>URL del servidor (opcional)</label><input name="base_url" placeholder="http://localhost:11434" value="{{ n.base_url or '' }}"></div>
+        </div>
+        <button class="btn" type="submit">Guardar motor</button>
+      </form>
+      <p class="hint" style="margin-top:14px">Local y Servidor son avanzados (tenés que correr el modelo vos). El 99% queda en <b>Nube</b>.</p>
     </div>
   </section>
 
